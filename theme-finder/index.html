@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+	<html>
+	<head>
+		<title>Similar Sentences</title>
+		<script src="src/js/util.js" type="text/javascript"></script>
+		<script src="src/js/params.js" type="text/javascript"></script>
+		<script src="src/js/init.js" type="text/javascript"></script>
+		<script src="src/js/similar-sentences.js" type="text/javascript"></script>
+		<script src="src/js/timer.js" type="text/javascript"></script>
+		<script src="study/tasks.js" type="text/javascript"></script>
+		<script src="lib/jquery/jquery.js" type="text/javascript"></script>	
+		<script src="lib/jquery/jquery.ui.js" type="text/javascript"></script>
+		<script src="lib/jquery/jquery.url.js" type="text/javascript"></script>
+		<link rel="stylesheet" href="style/similar-sentences.css">
+		<link rel="stylesheet" href="style/jquery-ui-smoothness.css">
+		<script type="text/javascript"> 
+		$(document).ready(init); // in similar-sentences.js
+		</script>	
+	</head>
+	<body>
+				<!--
+		<h1> Theme Finder Usability Study </h1>
+		<p> Thanks for your interest. This study is now closed, but you can read
+			more about the project <a href="http://mininghumanities.com/2012/07/23/finding-examples-of-a-theme-by-example/">here</a>.</p>
+			!-->
+
+		<div id="timer"></div>
+		<div id="introduction" class="pane">
+			<h1> Theme finder usability study </h1>
+			<p> Thanks for trying out the theme finder usability study. This 
+				study will probably take you around 5 minutes. </p>
+			<h3> Your Background </h3>
+			<p> Do you have a college-level background in English Language or 
+				Literature?
+				<select name="background">
+					<option value="no background">No</option>
+					<option value="in progress">Currently an undergraduate</option>
+					<option value="bs">Bachelor's Degree</option>
+					<option value="ms">Master's Degree</option>
+					<option value="phd">Ph. D.</option>
+					<option value="other">Other not listed.</option>
+				</select>
+			</p>
+			<h3> The Task </h3>
+			<p> You will be given a description of a literary theme, and 
+				two examples of it. Your goal will be to find more relevant 
+				examples of the theme. </p>
+			<h3> Time Limit </h3>
+			<p> There will be a time limit of <em>5 minutes</em>.</p>
+			<h3> Expert Evaluation </h3>
+			<p> Try to find the best examples you can, and mark them as relevant.
+				After everyone has finished participating, the results will be
+				judged by literary experts on whether they are good examples of
+				the theme. 
+			</p>
+			<h3> Self Evaluation </h3>
+			<p> At the end, we'll ask your opinion on the
+				experience you just had.</p>
+		<h1> Ready to start? </h1>
+		<button class="start-first">Start</button>
+		</div id="introduction">
+		<div id ="tasks" class="pane">
+			<div class="sequence task0 task">
+				<div class="header">
+					<p class="theme-name"></p>
+					<p class="theme-example 1"></p>
+					<p class="theme-example 2"></p>
+				</div class="header">
+				
+				<div class="similar-sentence-search">
+					<fieldset class="similar-sentence-search-form">
+						<label> Search for sentences </label>
+						<input  class="similar-sentences-input" 
+						name="query"></input>
+						<input type="button" class="search" value="Search"></input>
+						<input type="button" class="reset" value="Reset"></input>
+						<input class="refine-results" type="button" value="Refine results"></input>
+					</fieldset>
+				</div class="similar-sentence-search">
+				
+				<div class="relevance-feedback-search-results"></div>
+				
+				<div class="feedback">
+					<div class="marked-sentences">
+						<h1>Marked sentences</h1>
+						<button class="done-with-first">Submit results </button>
+						<div class="relevant">
+							<h3>Relevant sentences</h3>
+							<table class="relevant-table relevance-table"></table>
+						</div>
+						<div class="irrelevant">
+							<h3>Non-relevant sentences</h3>
+							<table class="irrelevant-table relevance-table"></table>
+						</div>
+					</div class="marked-sentences">
+				</div class="feedback">
+			</div class="sequence task0 task">
+
+			<div class="sequence task0 eval">
+				<h3>Thanks! Please evaluate your theme-finding experience.</h3>
+				<fieldset class="eval">
+					<p> Was your objective easy to understand? Did you understand how to label sentences?</p>
+					<input type="radio" value=1 name="understanding"/> <label> 1: Understood </label>
+					<br><input type="radio" value=2 name="understanding"/> <label> 2: Understood somewhat </label>
+					<br><input type="radio" value=3 name="understanding"/> <label> 3: Neutral </label>
+					<br><input type="radio" value=4 name="understanding"/> <label> 4: Did not understand some things </label>
+					<br><input type="radio" value=5 name="understanding"/> <label> 5: Did not understand </label>
+				</fieldset>
+				<fieldset class="eval">
+					<p> Did you understand the theme?</p>
+					<input type="radio" value=1 name="theme-understanding"/> <label> 1: Understood </label>
+					<br><input type="radio" value=2 name="theme-understanding"/> <label> 2: Understood somewhat </label>
+					<br><input type="radio" value=3 name="theme-understanding"/> <label> 3: Neutral </label>
+					<br><input type="radio" value=4 name="theme-understanding"/> <label> 4: Did not understand some things </label>
+					<br><input type="radio" value=5 name="theme-understanding"/> <label> 5: Did not understand </label>
+				</fieldset>
+				<fieldset class="eval">
+					<p> How would you rate your own performance? 
+						Are you satisfied with your results?
+					</p>
+					<input type="radio" value=1 name="performance"/> <label> 1: Satisfied </label>
+					<br><input type="radio" value=2 name="performance"/> <label> 2: Somewhat satisfied </label>
+					<br><input type="radio" value=3 name="performance"/> <label> 3: Neutral </label>
+					<br><input type="radio" value=4 name="performance"/> <label> 4: Somewhat dissatisfied </label>
+					<br><input type="radio" value=5 name="performance"/> <label> 5: Dissatisfied </label>
+				</fieldset>
+				<fieldset class="eval">
+					<p> How would you rate the difficulty of this task? Did you find it easy to find matching sentences?</p>
+					<input type="radio" value=1 name="difficulty"/> <label> 1: Easy </label>
+					<br><input type="radio" value=2 name="difficulty"/> <label> 2: Somewhat easy </label>
+					<br><input type="radio" value=3 name="difficulty"/> <label> 3: Neutral </label>
+					<br><input type="radio" value=4 name="difficulty"/> <label> 4: Somewhat difficult </label>
+					<br><input type="radio" value=5 name="difficulty"/> <label> 5: Difficult </label>
+				</fieldset>
+				<button class="finish"> Done</button>
+				
+			</div class="sequence task0 eval">
+			<div class="sequence task0 explanation"></div>			
+		</div id="tasks">
+		<div id="done" class="pane">
+			<a href="http://cs.berkeley.edu/~aditi"><img src="img/avatar.jpg"/></a>
+			<p> Thank you for completing this study, 
+				<br> I'm really grateful for your time. </p>
+			<p> -Aditi</p>
+		</div id="done">
+		<div id="no-double-participation" class="pane">
+			<a href="http://cs.berkeley.edu/~aditi"><img src="img/avatar.jpg"/></a>
+			<p> Thank you for completing this study, 
+				<br> I'm really grateful for your time. </p>
+			<p> -Aditi</p>
+		</div>
+	</body>
+	</html>

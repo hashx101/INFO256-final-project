@@ -1,0 +1,141 @@
+/***************************************************
+ Styling for the similar sentences functionality 
+**************************************************/
+body {
+    font-family:verdana, sans-serif;
+    font-size:12px;
+}
+
+#introduction p, div.header p{
+    width:500px;
+}
+
+#no-double-participation {
+   display:none; 
+}
+
+div.sequence{
+    min-width:1100px;
+    margin-bottom:0px;
+    min-height:95%;
+    bottom:0px;
+}
+
+
+td{
+    font-size:12px;
+    padding-top:5px;
+    padding-bottom:5px;
+}
+
+/** Search results **/
+.relevance-feedback-search-results{
+    width:800px;
+    min-height: 500px;
+}
+
+/** highlighting search terms **/
+.highlight0 {
+    background-color:lightyellow;
+}
+.highlight1 {
+    background-color:skyblue;
+}
+.highlight2 {
+    background-color:honeydew;
+}
+.highlight3 {
+    background-color:lavenderblush;
+}
+.highlight4 {
+    background-color:moccasin;
+}
+.highlight5 {
+    background-color:greenyellow;
+}
+
+/** Sentences already marked  **/
+.feedback{
+    position:fixed;
+    padding-left:10px;
+    top:10px;
+    bottom:10px;
+    width:300px;
+    left:820px;
+    overflow:auto;
+}   
+
+td.mark-relevance-feedback{
+    width:30px;
+}
+
+td.title{
+    width:150px;
+}
+
+td.header{
+    font-weight:bold;
+}
+
+input.relevance-feedback{
+    margin-right: 10px;
+}
+
+.feedback-label {
+    -webkit-transform: rotate(-40deg);	
+    -moz-transform: rotate(-40deg);
+}
+
+tr.header {
+    font-size:20px;
+    font-weight:bold;
+}
+
+td {
+    padding-left:20px;
+    border-bottom: 1px dotted gray;
+}
+
+td.sentence {
+    width:600px;
+}
+
+img.button.close {
+    width:16px;
+    padding-right:5px;
+    cursor:pointer;
+}
+
+/** The search form. **/
+
+fieldset{
+    background-color: #eee;
+    border:0px;
+    width: 780px;
+}
+
+/** The theme explanation **/
+h1.collection {
+    text-transform: capitalize;
+}
+
+div.sequence.explanation {
+    min-width: 100px;
+}
+
+p.theme-name {
+    font-size: 15px;
+    font-weight:bold;
+}
+
+/** The Timer **/
+#timer {
+    position:fixed;
+    top:0px;
+    left: 770px;
+    width:50px;
+    height:30px;
+    background:black;
+    font-size:20px;
+    color:white;
+}
