@@ -167,7 +167,8 @@ function process_string_query($query, $old_query){
 	return $result;
 }
 
-/* Convert a string query to a sparse vector by assigning weights to the words in the query, where words are determined by splitting on whitespace. */
+/* Convert a string query to a sparse vector by assigning weights to the words in the query, 
+where words are determined by splitting on whitespace. */
 function convert_query_to_sparse_vector($query){
 	global $STOPS;
 	$words = explode(" ", $query);
@@ -283,6 +284,78 @@ function calculate_new_vector_query($query, $relevant, $irrelevant){
 	return $pruned_query;
 }
 
+
+// vector adjustment: Ide dec-chi
+/*
+function calculate_sentence_adjustment_idedec($query, $vector_query, $relevant, $irrelevant){
+	$already_relevant = (array) $query['relevant'];
+	$already_irrelevant = (array) $query['irrelevant'];
+	
+	$new_relevant = array_subtract($already_relevant, $relevant);
+	$no_longer_relevant = array_subtract($relevant, $already_relevant);
+	
+	// get the descending scores 
+	$descend_irrelevant = retrieve_sentences_from_vector_query($irrelevant);
+	//get the id of the least relevant(the first one)
+	$top_irrelevant = array_shift(array_values($descend_irrelevant));
+	
+	$new_irrelevant = array_subtract($already_irrelevant, $top_irrelevant);
+	$no_longer_irrelevant = array_subtract($top_irrelevant, $already_irrelevant);
+	
+	$relevant_vect = convert_sentence_IDs_to_sparse_vector($new_relevant);
+	$no_longer_relevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_relevant);
+	$irrelevant_vect = convert_sentence_IDs_to_sparse_vector($new_irrelevant);
+	$no_longer_irrelevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_irrelevant);
+	
+	$positive_adjustment = $relevant_vect->scalarMultiply($ALPHA_w_plus);
+	
+	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1*$ALPHA_w_plus);
+	
+	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*$ALPHA_w_plus);
+	
+	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply($ALPHA_w_plus);
+	
+	$adjustment = $positive_adjustment->vectorAdd($negative_adjustment);
+	$adjustment = $adjustment->vectorAdd($no_longer_positive_adjustment);
+	$adjustment = $adjustment->vectorAdd($no_longer_negative_adjustment);
+	return $adjustment;
+}
+
+// vector adjustment: Ide regular
+function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant){
+	$already_relevant = (array) $query['relevant'];
+	$already_irrelevant = (array) $query['irrelevant'];
+	$new_relevant = array_subtract($already_relevant, $relevant);
+	$no_longer_relevant = array_subtract($relevant, $already_relevant);
+
+	$new_irrelevant = array_subtract($already_irrelevant, $irrelevant);
+	$no_longer_irrelevant = array_subtract($irrelevant, $already_irrelevant);
+	
+	$relevant_vect = convert_sentence_IDs_to_sparse_vector($new_relevant);
+	//$relevant_vect->normalize();
+	$no_longer_relevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_relevant);
+	//$no_longer_relevant_vect->normalize();
+	$irrelevant_vect = convert_sentence_IDs_to_sparse_vector($new_irrelevant);
+	//$irrelevant_vect->normalize();
+	$no_longer_irrelevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_irrelevant);
+	//$no_longer_irrelevant_vect->normalize();
+	
+	$positive_adjustment = $relevant_vect->scalarMultiply($ALPHA_w_plus);
+	
+	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1*$ALPHA_w_plus);
+	
+	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*$ALPHA_w_plus);
+	
+	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply($ALPHA_w_plus);
+	
+	$adjustment = $positive_adjustment->vectorAdd($negative_adjustment);
+	$adjustment = $adjustment->vectorAdd($no_longer_positive_adjustment);
+	$adjustment = $adjustment->vectorAdd($no_longer_negative_adjustment);
+	return $adjustment;
+}
+*/
+
+//vector adjustment: Rocchio
 
 function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant){
 	global $ALPHA_plus; // relevant sentences weight
@@ -505,8 +578,10 @@ function retrieve_sentences_from_vector_query($query){
 		while($scores = mysql_fetch_array($words_in_sentences)){
 			if($scores['score'] > 0){
 				array_push($sentences, $scores['sentence_id']);
-				$sentence_scores[$scores['sentence_id']] =
-					$scores['score'];
+				//echo $sentences."-".$scores['sentence_id'];
+				
+				$sentence_scores[$scores['sentence_id']] = $scores['score'];
+				//echo $sentence_scores[$scores['sentence_id']];
 			}
 		}
 	}
@@ -545,7 +620,7 @@ function retrieve_sentences_from_vector_query($query){
 		array_push ($sent_ids, $sent['id']);
 	}
 	return fetch_top_n_sentences($sent_ids);
-}
+}//retrieve_sentences_from_vector_query
 
 function score_compare($a, $b) {
 		return $a['score'] > $b['score'] ? 1 : 
