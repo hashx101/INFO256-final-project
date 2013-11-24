@@ -11,7 +11,12 @@ from twisted.web.http_headers import Headers
 
 from pprint import pprint
 from json import loads
+
 import urllib
+import random
+
+
+TEST_1 = [4779, 12922, 19498, 30066, 32111, 32715, 43494, 48981, 54363, 68009, 93470]
 
 
 HEADERS = Headers({'User-Agent': ['Twisted Web Client'],
@@ -27,17 +32,15 @@ HEADERS = Headers({'User-Agent': ['Twisted Web Client'],
 class BeginningPrinter(Protocol):
     def __init__(self, finished):
         self.finished = finished
-        self.remaining = 1024 * 10
 
     def dataReceived(self, bytes):
-        if self.remaining:
-            display = bytes[:self.remaining]
-            print('Response body:')
-            pprint(loads(display))
-            self.remaining -= len(display)
+        display = bytes
+        print('Response body:')
+        pprint(loads(display))
 
     def connectionLost(self, reason):
         print('Finished receiving body:', reason.getErrorMessage())
+        reason.printTraceback()
 
 
 def printRequest(response):
@@ -53,31 +56,60 @@ def printRequest(response):
 
 def sendQuery(**kwargs):
     body = FileBodyProducer(StringIO(urllib.urlencode(kwargs)))  
-    d = agent.request(
-        'POST',
-        'http://localhost/theme-finder/src/php/similarsentences/similarsentences.php',
-        HEADERS,
-        body)    
-    d.addBoth(printRequest)
+    d = agent.request('POST',
+                      'http://localhost/theme-finder/src/php/similarsentences/similarsentences.php',
+                      HEADERS,
+                      body)    
+    return d
+    
 
 
 def sendStringQuery(string, instance="shakespeare"):
-    sendQuery(query=string,
-              instance=instance,
-              string_query='true',
-              vector_query='false')
+    return sendQuery(query=string,
+                     instance=instance,
+                     string_query='true',
+                     vector_query='false')
 
 
-def sendVectorQuery(vector, instance="shakespeare", relevant=[], irrelevant=[]):
-    sendQuery(query=vector,
-              relevant=relevant,
-              irrelevant=irrelevant,
-              instance=instance,
-              string_query='false',
-              vector_query='true')
+
+def sendVectorQuery(features=None, instance="shakespeare", relevant=[], irrelevant=[]):
+    print('Calling vector query')
+    return sendQuery(vector={'relevant': relevant,
+                             'irrelevant': irrelevant,
+                             'features': features},
+                    relevant=relevant,
+                    irrelevant=irrelevant,
+                    instance=instance,
+                    string_query='false',
+                    vector_query='true')
+
+def sendFeatureQuery(instance="shakespeare", relevant=[], query={}):
+    print('Calling feature query')
+    return sendQuery(relevant=relevant,
+                     query=query,
+                     instance=instance,
+                     string_query='false',
+                     vector_query='false',
+                     feature_query='true')  
+
+def sendSimilar(relevant=[], instance="shakespeare"):
+    d = sendFeatureQuery(instance, relevant)
+    d.addCallback(lambda features: sendVectorQuery(features=features, instance=instance, relevant=relevant, irrelevant=[]))
+    d.addCallback(printRequest)
+
+    return d
+
+def test(testset=TEST_1):
+    startset = random.sample(testset, len(testset) / 2)
+    d = sendSimilar(startset)
+    d.addCallback(lambda vec: d.chainDeferred(sendVectorQuery(features=vec, relevant=startset)))
 
 
 if __name__ == "__main__":
     agent = Agent(reactor)
-    sendStringQuery("test")
+    #sendStringQuery("test")
+    #sendVectorQuery({"relevant":["12922","32715","37320"],"irrelevant":[]}, relevant=["12922","32715","37320"], irrelevant=[])
+    #sendFeatureQuery(relevant=[12922,32715,37320]).addCallback(printRequest)
+    #sendSimilar(relevant=[12922,32715,37320])
+    test()
     reactor.run()
