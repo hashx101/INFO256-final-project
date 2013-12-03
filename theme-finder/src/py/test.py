@@ -9,6 +9,7 @@ import random
 import math
 import copy
 from collections import defaultdict
+import pylab
 
 # life is a stage
 TEST_1 = [4779, 19498, 30066, 32111, 32715, 43494, 48981, 54363, 68009, 93470]
@@ -69,12 +70,13 @@ def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
 VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
 
 def test(testset=TEST_1):
-    results = {}
-    for percent in map(lambda i: i * .1, range(2,10)):
-        results[str(percent)] = {}
+    percentages = map(lambda i: i * .1, range(2,10))
+    results = [0] * len(percentages)
+    for index, percent in enumerate(percentages):
+        results[index] = {}
         for fn in VEC_ADJ_FNS:
-            results[str(percent)][fn] = {'recalls': []}
-        for _ in range(5):
+            results[index][fn] = {'recalls': []}
+        for _ in range(10):
             # sample percent of subset for running fns against
             startset = random.sample(testset, int(math.ceil(len(testset) * percent)))
             for fn in VEC_ADJ_FNS:
@@ -90,17 +92,35 @@ def test(testset=TEST_1):
                 found_not_in_start = set(relevant).difference(startset)
 
 
-                results[str(percent)][fn]['recalls'].append(float(len(found_not_in_start))/len(to_find))
+                results[index][fn]['recalls'].append(float(len(found_not_in_start))/len(to_find))
 
                 print(testset)
                 print(startset)
                 print(relevant)
             
         for fn in VEC_ADJ_FNS:
-            recalls = results[str(percent)][fn]['recalls']
-            results[str(percent)][fn]['recall'] = float(sum(recalls))/len(recalls)
+            recalls = results[index][fn]['recalls']
+            results[index][fn]['recall'] = float(sum(recalls))/len(recalls)
 
     pprint(results)
+
+    x_list = [percentages, percentages, percentages]
+    y_list = []
+    label_list = []
+    for fn in VEC_ADJ_FNS:
+        t = []
+        for index in range(len(percentages)):
+            t.append(results[index][fn]['recall'])
+        y_list.append(tuple(t))
+        label_list.append(fn)
+    graph(x_list, y_list, label_list)
+
+
+def graph(x_list, y_list, label_list):
+    for x, y, label in zip(x_list, y_list, label_list):
+        pylab.plot(x, y, label=label)
+    pylab.legend()
+    pylab.show()
 
 
 if __name__ == "__main__":
