@@ -107,9 +107,16 @@ function dispatch(){
 		// unpack sentences
 		$relevant_sentences = decodePostJSON('relevant');
 		$irrelevant_sentences = decodePostJSON('irrelevant');
+		if (array_key_exists('vector_function', $_POST)){
+			$vector_function = $_POST['vector_function'];
+		}else{
+			$vector_function = "rocchio";
+		}
+		error_log('Using ' . $vector_function);
+
 		$query = (array) json_decode($_POST['query']);
 		$result = process_relevance_feedback($query, 
-			$relevant_sentences, $irrelevant_sentences);
+			$relevant_sentences, $irrelevant_sentences, $vector_function);
 	}
 	echo json_encode($result);
 }
@@ -248,9 +255,9 @@ Return:
 	query:{featureID:floating-point value, ...}
 	}
 */
-function process_relevance_feedback($query, $relevant, $irrelevant){
+function process_relevance_feedback($query, $relevant, $irrelevant, $vec_func='rocchio'){
 	$t1 = time();
-	$new_query = calculate_new_vector_query($query, $relevant, $irrelevant);
+	$new_query = calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func);
 	$t2 = time();
 	if ($timing) {
 		echo "<br> Time to calculate new vector query: ".($t2-$t1)."s";
@@ -269,12 +276,19 @@ function process_relevance_feedback($query, $relevant, $irrelevant){
 	return $result;
 }
 
-function calculate_new_vector_query($query, $relevant, $irrelevant){
+function calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func='rocchio'){
 	$features = (array) $query['features'];
 	$vector_query = new SparseVector($features);
 	$vector_query->normalize();
-	$sentence_adjustment = calculate_sentence_adjustment($query, $vector_query, 
-		$relevant, $irrelevant);
+
+	$fns = array(
+	'ide_dec' => 'calculate_sentence_adjustment_ide_dec',
+	'rocchio' => 'calculate_sentence_adjustment_rocchio',
+	'ide_regular' => 'calculate_sentence_adjustment_ide_regular'
+	);
+
+	$fn = $fns[$vec_func];
+	$sentence_adjustment = $fn($query, $vector_query, $relevant, $irrelevant);
 	$new_query = $vector_query->vectorAdd($sentence_adjustment);
 	$new_query->normalize();
 	$new_features = $new_query->features;
@@ -286,8 +300,7 @@ function calculate_new_vector_query($query, $relevant, $irrelevant){
 
 
 // vector adjustment: Ide dec-chi
-/*
-function calculate_sentence_adjustment_idedec($query, $vector_query, $relevant, $irrelevant){
+function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant, $irrelevant){
 	$already_relevant = (array) $query['relevant'];
 	$already_irrelevant = (array) $query['irrelevant'];
 	
@@ -322,7 +335,7 @@ function calculate_sentence_adjustment_idedec($query, $vector_query, $relevant, 
 }
 
 // vector adjustment: Ide regular
-function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant){
+function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relevant, $irrelevant){
 	$already_relevant = (array) $query['relevant'];
 	$already_irrelevant = (array) $query['irrelevant'];
 	$new_relevant = array_subtract($already_relevant, $relevant);
@@ -353,11 +366,10 @@ function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrele
 	$adjustment = $adjustment->vectorAdd($no_longer_negative_adjustment);
 	return $adjustment;
 }
-*/
 
 //vector adjustment: Rocchio
 
-function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant){
+function calculate_sentence_adjustment_rocchio($query, $vector_query, $relevant, $irrelevant){
 	global $ALPHA_plus; // relevant sentences weight
 	global $ALPHA_minus; // irrelevant sentences weight
 	$already_relevant = (array) $query['relevant'];

@@ -1,67 +1,38 @@
 from __future__ import print_function
 
-from StringIO import StringIO
-
-from twisted.internet import reactor
-from twisted.internet.protocol import Protocol
-from twisted.internet.defer import Deferred
-from twisted.web.client import Agent
-from twisted.web.client import FileBodyProducer
-from twisted.web.http_headers import Headers
 
 from pprint import pprint
 from json import loads
-
+import urllib2
 import urllib
 import random
+import math
+import copy
+from collections import defaultdict
+import pylab
+
+# life is a stage
+TEST_1 = [4779, 19498, 30066, 32111, 32715, 43494, 48981, 54363, 68009, 93470]
 
 
-TEST_1 = [4779, 12922, 19498, 30066, 32111, 32715, 43494, 48981, 54363, 68009, 93470]
-
-
-HEADERS = Headers({'User-Agent': ['Twisted Web Client'],
+HEADERS = {'User-Agent': ['Twisted Web Client'],
                  'Origin': ['http://localhost'],
                  'Accept-Language': ['en-US','en'],
                  'Content-Type': ['application/x-www-form-urlencoded'],
                  'Accept': ['*/*'],
                  'Referer': ['http://localhost/theme-finder/'],
                  'X-Requested-With': ['XMLHttpRequest'],
-                 'Connection': ['keep-alive']})
-
-
-class BeginningPrinter(Protocol):
-    def __init__(self, finished):
-        self.finished = finished
-
-    def dataReceived(self, bytes):
-        display = bytes
-        print('Response body:')
-        pprint(loads(display))
-
-    def connectionLost(self, reason):
-        print('Finished receiving body:', reason.getErrorMessage())
-        reason.printTraceback()
-
-
-def printRequest(response):
-    print('Response version:', response.version)
-    print('Response code:', response.code)
-    print('Response phrase:', response.phrase)
-    print('Response headers:')
-    print(list(response.headers.getAllRawHeaders()))
-    finished = Deferred()
-    response.deliverBody(BeginningPrinter(finished))
-    return finished
-
+                 'Connection': ['keep-alive']}
 
 def sendQuery(**kwargs):
-    body = FileBodyProducer(StringIO(urllib.urlencode(kwargs)))  
-    d = agent.request('POST',
-                      'http://localhost/theme-finder/src/php/similarsentences/similarsentences.php',
-                      HEADERS,
-                      body)    
-    return d
-    
+    data = urllib.urlencode(kwargs)
+    req = urllib2.Request('http://localhost/theme-finder/src/php/similarsentences/similarsentences.php', data)
+    response = urllib2.urlopen(req)
+    for line in response:
+        try:
+            return loads(line)
+        except:
+            print('Derped on {}'.format(line))
 
 
 def sendStringQuery(string, instance="shakespeare"):
@@ -72,44 +43,87 @@ def sendStringQuery(string, instance="shakespeare"):
 
 
 
-def sendVectorQuery(features=None, instance="shakespeare", relevant=[], irrelevant=[]):
+def sendVectorQuery(query={'relevant': [],
+                           'irrelevant': [],
+                           'features': []},
+                    vector_function='rocchio',
+                    instance="shakespeare",
+                    relevant=[],
+                    irrelevant=[]):
     print('Calling vector query')
-    return sendQuery(vector={'relevant': relevant,
-                             'irrelevant': irrelevant,
-                             'features': features},
-                    relevant=relevant,
-                    irrelevant=irrelevant,
-                    instance=instance,
-                    string_query='false',
-                    vector_query='true')
-
-def sendFeatureQuery(instance="shakespeare", relevant=[], query={}):
-    print('Calling feature query')
-    return sendQuery(relevant=relevant,
-                     query=query,
+    return sendQuery(query=query,
+                     vector_function=vector_function,
+                     relevant=relevant,
+                     irrelevant=irrelevant,
                      instance=instance,
                      string_query='false',
-                     vector_query='false',
-                     feature_query='true')  
+                     vector_query='true')
 
-def sendSimilar(relevant=[], instance="shakespeare"):
-    d = sendFeatureQuery(instance, relevant)
-    d.addCallback(lambda features: sendVectorQuery(features=features, instance=instance, relevant=relevant, irrelevant=[]))
-    d.addCallback(printRequest)
+def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
+    print('Calling feature query')
+    return sendQuery(relevant=relevant,
+                     irrelevant=irrelevant,
+                     instance=instance,
+                     string_query='false',
+                     vector_query='true')
 
-    return d
+VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
 
 def test(testset=TEST_1):
-    startset = random.sample(testset, len(testset) / 2)
-    d = sendSimilar(startset)
-    d.addCallback(lambda vec: d.chainDeferred(sendVectorQuery(features=vec, relevant=startset)))
+    percentages = map(lambda i: i * .1, range(2,10))
+    results = [0] * len(percentages)
+    for index, percent in enumerate(percentages):
+        results[index] = {}
+        for fn in VEC_ADJ_FNS:
+            results[index][fn] = {'recalls': []}
+        for _ in range(10):
+            # sample percent of subset for running fns against
+            startset = random.sample(testset, int(math.ceil(len(testset) * percent)))
+            for fn in VEC_ADJ_FNS:
+                print('testing {}'.format(fn))
+                response = sendVectorQuery(vector_function=fn,
+                                           relevant=startset)
+                relevant = copy.copy(startset)
+                for sentence in response['sentences']:
+                    sentence_id = int(sentence['id'])
+                    if sentence_id in testset and sentence_id not in relevant:
+                        relevant.append(sentence_id)
+                to_find = set(testset).difference(set(startset))
+                found_not_in_start = set(relevant).difference(startset)
+
+
+                results[index][fn]['recalls'].append(float(len(found_not_in_start))/len(to_find))
+
+                print(testset)
+                print(startset)
+                print(relevant)
+            
+        for fn in VEC_ADJ_FNS:
+            recalls = results[index][fn]['recalls']
+            results[index][fn]['recall'] = float(sum(recalls))/len(recalls)
+
+    pprint(results)
+
+    x_list = [percentages, percentages, percentages]
+    y_list = []
+    label_list = []
+    for fn in VEC_ADJ_FNS:
+        t = []
+        for index in range(len(percentages)):
+            t.append(results[index][fn]['recall'])
+        y_list.append(tuple(t))
+        label_list.append(fn)
+    graph(x_list, y_list, label_list)
+
+
+def graph(x_list, y_list, label_list):
+    for x, y, label in zip(x_list, y_list, label_list):
+        pylab.plot(x, y, label=label)
+    pylab.legend()
+    pylab.show()
 
 
 if __name__ == "__main__":
-    agent = Agent(reactor)
     #sendStringQuery("test")
-    #sendVectorQuery({"relevant":["12922","32715","37320"],"irrelevant":[]}, relevant=["12922","32715","37320"], irrelevant=[])
-    #sendFeatureQuery(relevant=[12922,32715,37320]).addCallback(printRequest)
-    #sendSimilar(relevant=[12922,32715,37320])
+    #print(sendQuery(vector_query='true', instance='shakespeare', relevant=[19498]))
     test()
-    reactor.run()
