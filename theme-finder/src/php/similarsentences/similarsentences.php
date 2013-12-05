@@ -262,14 +262,8 @@ function process_relevance_feedback($query, $relevant, $irrelevant, $vec_func='r
 	$t1 = time();
 	$new_query = calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func);
 	$t2 = time();
-	if ($timing) {
-		echo "<br> Time to calculate new vector query: ".($t2-$t1)."s";
-	}
 	$sentences = retrieve_sentences_from_vector_query($new_query);
 	$t3 = time();
-	if ($timing) {
-		echo "<br> Time to retrieve new sentences: ".($t3-$t2)."s";
-	}
 	$result = array();
 	$result['sentences']  = $sentences;
 	$result['query'] = array();
@@ -287,10 +281,10 @@ function calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func='r
 	// able to call multiple vector adjustment functions
 	$fns = array(
 	'ide_dec' => 'calculate_sentence_adjustment_ide_dec',
-	'rocchio' => 'calculate_sentence_adjustment_rocchio',
+	'rocchio' => 'calculate_sentence_adjustment',
 	'ide_regular' => 'calculate_sentence_adjustment_ide_regular'
 	);
-	
+	error_log($vec_func);
 	$fn = $fns[$vec_func];
 	$sentence_adjustment = $fn($query, $vector_query, $relevant, $irrelevant);
 	
@@ -380,7 +374,7 @@ function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relev
 
 
 //vector adjustment: Rocchio
-function calculate_sentence_adjustment_rocchio($query, $vector_query, $relevant, $irrelevant){
+function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant){
 	global $ALPHA_plus; // relevant sentences weight
 	global $ALPHA_minus; // irrelevant sentences weight
 	$already_relevant = (array) $query['relevant'];

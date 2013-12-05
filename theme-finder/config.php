@@ -8,7 +8,7 @@ function connect($instance){
 	}
 	if($instance == "shakespeare"){
 		$user="wordseer_a";     # DB username
-		$password="your password here"; # DB password.
+		$password="wordseer"; # DB password.
 		$database="wordseer_a"; # DB schema
 	}
 	mysql_connect('localhost',$user,$password) or die (mysql_error());
