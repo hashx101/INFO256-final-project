@@ -284,7 +284,6 @@ function calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func='r
 	'rocchio' => 'calculate_sentence_adjustment',
 	'ide_regular' => 'calculate_sentence_adjustment_ide_regular'
 	);
-	error_log($vec_func);
 	$fn = $fns[$vec_func];
 	$sentence_adjustment = $fn($query, $vector_query, $relevant, $irrelevant);
 	
@@ -300,7 +299,7 @@ function calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func='r
 }
 
 
-// vector adjustment: Ide dec-chi
+// vector adjustment: Ide dec-hi
 
 function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant, $irrelevant){
 	GLOBAL $ALPHA_w_plus;
@@ -600,8 +599,11 @@ Return:
 	A list of N=$LIMIT sentences ordered by best match first
 	[{id:sentenceID, sentence:string sentence}, ...] 
 */
-function retrieve_sentences_from_vector_query($query){
+function retrieve_sentences_from_vector_query($query, $limit=0){
 	global $LIMIT;
+	if ($limit == 0) {
+		$limit = $LIMIT;
+	}
 	$sentence_scores = array();
 	$sentences = array();
 	// get sentences that match the word-based features
@@ -626,7 +628,7 @@ function retrieve_sentences_from_vector_query($query){
 		SUM($score_case) as score
 		from sentence_word_tf_idf
 		WHERE word_id in (".$string_word_ids.")
-		GROUP BY sentence_id ORDER BY score desc LIMIT ".$LIMIT.";";
+		GROUP BY sentence_id ORDER BY score desc LIMIT ".$limit.";";
 		$words_in_sentences = mysql_query($sql)
 				or die("<b>A fatal MySQL error occured</b>.
 				<br/> Query: " . $sql . "

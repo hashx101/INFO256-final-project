@@ -10,9 +10,9 @@ import math
 import copy
 from collections import defaultdict
 import pylab
+import testsets as ts
 
-# life is a stage
-TEST_1 = [4779, 19498, 30066, 32111, 32715, 43494, 48981, 54363, 68009, 93470]
+
 
 
 HEADERS = {'User-Agent': ['Twisted Web Client'],
@@ -69,34 +69,35 @@ def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
 
 VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
 
-def test(testset=TEST_1):
-    percentages = map(lambda i: i * .1, range(2,10))
+def test(testset=ts.TEST_3):
+    instance = testset['instance']
+    relevant = testset['relevant']
+    irrelevant = testset['irrelevant']
+    percentages = map(lambda i: i * .1, range(1,5))
     results = [0] * len(percentages)
     for index, percent in enumerate(percentages):
         results[index] = {}
         for fn in VEC_ADJ_FNS:
             results[index][fn] = {'recalls': []}
-        for _ in range(10):
+        for _ in range(5):
             # sample percent of subset for running fns against
-            startset = random.sample(testset, int(math.ceil(len(testset) * percent)))
+            relevant_sample = random.sample(relevant, int(math.ceil(len(relevant) * percent)))
+            irrelevant_sample = random.sample(irrelevant, int(math.ceil(len(irrelevant) * percent)))
             for fn in VEC_ADJ_FNS:
-                print('testing {}'.format(fn))
                 response = sendVectorQuery(vector_function=fn,
-                                           relevant=startset)
-                relevant = copy.copy(startset)
+                                           relevant=relevant_sample,
+                                           irrelevant=irrelevant_sample,
+                                           instance=instance)
+                relevant_start = copy.copy(relevant_sample)
                 for sentence in response['sentences']:
                     sentence_id = int(sentence['id'])
-                    if sentence_id in testset and sentence_id not in relevant:
-                        relevant.append(sentence_id)
-                to_find = set(testset).difference(set(startset))
-                found_not_in_start = set(relevant).difference(startset)
+                    if sentence_id in relevant and sentence_id not in relevant_start:
+                        relevant_start.append(sentence_id)
+                to_find = set(relevant).difference(set(relevant_sample))
+                found_not_in_start = set(relevant_start).difference(relevant_sample)
 
 
                 results[index][fn]['recalls'].append(float(len(found_not_in_start))/len(to_find))
-
-                print(testset)
-                print(startset)
-                print(relevant)
             
         for fn in VEC_ADJ_FNS:
             recalls = results[index][fn]['recalls']
@@ -107,12 +108,15 @@ def test(testset=TEST_1):
     x_list = [percentages, percentages, percentages]
     y_list = []
     label_list = []
+    offset = 0
     for fn in VEC_ADJ_FNS:
         t = []
         for index in range(len(percentages)):
-            t.append(results[index][fn]['recall'])
+            t.append(results[index][fn]['recall'] + offset)
         y_list.append(tuple(t))
         label_list.append(fn)
+        offset += .001
+    print(zip(y_list, label_list))
     graph(x_list, y_list, label_list)
 
 
