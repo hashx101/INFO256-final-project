@@ -11,6 +11,7 @@ import copy
 from collections import defaultdict
 import pylab
 import testsets as ts
+import numpy
 
 
 
@@ -82,7 +83,7 @@ def test(testset=ts.TEST_3):
         for _ in range(5):
             # sample percent of subset for running fns against
             relevant_sample = random.sample(relevant, int(math.ceil(len(relevant) * percent)))
-            irrelevant_sample = random.sample(irrelevant, int(math.ceil(len(irrelevant) * percent)))
+            irrelevant_sample = irrelevant
             for fn in VEC_ADJ_FNS:
                 response = sendVectorQuery(vector_function=fn,
                                            relevant=relevant_sample,
@@ -105,18 +106,21 @@ def test(testset=ts.TEST_3):
 
     pprint(results)
 
-    x_list = [percentages, percentages, percentages]
     y_list = []
     label_list = []
     offset = 0
     for fn in VEC_ADJ_FNS:
-        t = []
+        mean_list = []
+        median_list = []
         for index in range(len(percentages)):
-            t.append(results[index][fn]['recall'] + offset)
-        y_list.append(tuple(t))
-        label_list.append(fn)
+            mean_list.append(results[index][fn]['recall'] + offset)
+            median_list.append(numpy.median(results[index][fn]['recalls']) + offset)
+        y_list.append(tuple(mean_list))
+        label_list.append(fn + ' mean')
+        y_list.append(tuple(median_list))
+        label_list.append(fn + ' median')
         offset += .001
-    print(zip(y_list, label_list))
+    x_list = [percentages] * len(y_list)
     graph(x_list, y_list, label_list)
 
 
