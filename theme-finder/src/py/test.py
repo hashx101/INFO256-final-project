@@ -18,9 +18,11 @@ from prettyplotlib import plt
 from prettyplotlib import mpl
 from prettyplotlib import brewer2mpl
 from matplotlib.font_manager import FontProperties
+import random
+import pickle
 
 
-SAMPLES = 100
+SAMPLES = 50
 HEADERS = {'User-Agent': ['Twisted Web Client'],
                  'Origin': ['http://localhost'],
                  'Accept-Language': ['en-US','en'],
@@ -56,7 +58,7 @@ def sendVectorQuery(query={'relevant': [],
                     instance="shakespeare",
                     relevant=[],
                     irrelevant=[]):
-    print('Calling vector query')
+    # print('Calling vector query')
     return sendQuery(query=query,
                      vector_function=vector_function,
                      relevant=relevant,
@@ -79,15 +81,20 @@ def test(testset=ts.TEST_2):
     instance = testset['instance']
     relevant = testset['relevant']
     irrelevant = testset['irrelevant']
-    percentages = map(lambda i: i * .1, range(1,5))
+    percentages = map(lambda i: i * .02, range(1,35))
     results = [0] * len(percentages)
     for index, percent in enumerate(percentages):
+        print('Percentage: {}'.format(percent * 100))
         results[index] = {}
         for fn in VEC_ADJ_FNS:
             results[index][fn] = {'recalls': []}
-        for _ in range(SAMPLES):
+        for sample_num in range(SAMPLES):
+            print('Sample: {}'.format(sample_num + 1))
             # sample percent of subset for running fns against
-            relevant_sample = random.sample(relevant, int(math.ceil(len(relevant) * percent)))
+            relevant_sample = random.sample(relevant,
+                                            max(1,
+                                                min(int(math.floor(len(relevant) * percent)),
+                                                    len(relevant))))
             irrelevant_sample = irrelevant
             for fn in VEC_ADJ_FNS:
                 response = sendVectorQuery(vector_function=fn,
@@ -103,21 +110,29 @@ def test(testset=ts.TEST_2):
                 found_not_in_start = set(relevant_start).difference(relevant_sample)
 
 
-                results[index][fn]['recalls'].append(float(len(found_not_in_start))/len(to_find))
+                results[index][fn]['recalls'].append(float(len(found_not_in_start))/max(.0000001, len(to_find)))
             
         for fn in VEC_ADJ_FNS:
             recalls = results[index][fn]['recalls']
             results[index][fn]['recall'] = float(sum(recalls))/len(recalls)
 
-    pprint(results)
 
+    pprint(results)
+    results = {'results': results, 'percentages': percentages}
+    with open('results', 'w') as f:
+        pickle.dump(results, f)
+    graph(results)
+
+def graph(res_dict):
+    results = res_dict['results']
+    percentages = res_dict['percentages']
     y_list_mean = []
     y_list_median = []
 
-    points = {'rocchio': {'x': [],
-                          'y': []},
-              'ide_dec': {'x': [],
-                          'y': []},
+    points = {'rocchio':     {'x': [],
+                              'y': []},
+              'ide_dec':     {'x': [],
+                              'y': []},
               'ide_regular': {'x': [],
                               'y': []}}
 
@@ -172,13 +187,15 @@ def test(testset=ts.TEST_2):
         fig.savefig('line_plot_{}_{}_samples.png'.format(fn, SAMPLES))
 
     fig, ax = plt.subplots(1)
-    ax.set_title(fn.capitalize())
+    ax.set_title('Recalls')
     ax.title.set_fontproperties(title_font)
-    colors = {'rocchio': 'red',
-              'ide_dec': 'blue',
-              'ide_regular': 'green'}
+    colors = {'rocchio': 'green',
+              'ide_dec': 'red',
+              'ide_regular': 'blue'}
     for fn, xy in points.iteritems():
-        ppl.scatter(ax, xy['x'], xy['y'], label=fn, facecolor=colors[fn])
+        jitter = .05
+        xs = [x + random.uniform(-jitter, jitter) for x in xy['x']]
+        ppl.scatter(ax, xy['x'], xy['y'], label=fn, facecolor=colors[fn], alpha=0.5)
 
     for label in ax.get_xticklabels():
         label.set_fontproperties(tic_font)
