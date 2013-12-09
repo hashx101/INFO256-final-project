@@ -30,7 +30,7 @@ from matplotlib import cm
 from matplotlib.mlab import griddata
 
 
-SAMPLES = 10
+SAMPLES = 25
 HEADERS = {'User-Agent': ['Twisted Web Client'],
                  'Origin': ['http://localhost'],
                  'Accept-Language': ['en-US','en'],
@@ -93,49 +93,127 @@ def test(testset=ts.TEST_3):
     instance = testset['instance']
     relevant = testset['relevant']
     irrelevant = testset['irrelevant']
-    percentages = map(lambda i: i * .02, range(1,35))
-    results = [0] * len(percentages)
-    for index, percent in enumerate(percentages):
-        print('Percentage: {}'.format(percent * 100))
-        results[index] = {}
+
+
+    percentages = util.step_range(.02, .7, .02)
+    results = {}
+    for percent in percentages:
+        results[percent] = {}
         for fn in VEC_ADJ_FNS:
-            results[index][fn] = {'recalls': []}
+            results[percent][fn] = {'recalls': []}
         for sample_num in range(SAMPLES):
-            print('Sample: {}'.format(sample_num + 1))
-            # sample percent of subset for running fns against
-            relevant_sample = random.sample(relevant,
-                                            max(1,
-                                                min(int(math.floor(len(relevant) * percent)),
-                                                    len(relevant))))
+            print('Percent: {} Sample: {}'.format(percent, sample_num + 1))
+            relevant_sample = util.percent_sample(relevant, percent)
             irrelevant_sample = irrelevant
             for fn in VEC_ADJ_FNS:
                 response = sendVectorQuery(vector_function=fn,
                                            relevant=relevant_sample,
                                            irrelevant=irrelevant_sample,
                                            instance=instance)
-                relevant_start = copy.copy(relevant_sample)
+
+                relevant_returned = copy.copy(relevant_sample)
+                relevent_set = set(relevant)
+                relevant_sample_set = set(relevant_sample)
                 for sentence in response['sentences']:
                     sentence_id = int(sentence['id'])
-                    if sentence_id in relevant and sentence_id not in relevant_start:
-                        relevant_start.append(sentence_id)
-                to_find = set(relevant).difference(set(relevant_sample))
-                found_not_in_start = set(relevant_start).difference(relevant_sample)
+                    if sentence_id in relevant and sentence_id not in relevant_returned:
+                        relevant_returned.append(sentence_id)
+                to_find = relevent_set.difference(relevant_sample_set)
+                found = set(relevant_returned).difference(relevant_sample_set)
 
 
-                results[index][fn]['recalls'].append(float(len(found_not_in_start))/max(.0000001, len(to_find)))
+                results[percent][fn]['recalls'].append(len(found) / max(.0000001, len(to_find)))
             
         for fn in VEC_ADJ_FNS:
-            recalls = results[index][fn]['recalls']
-            results[index][fn]['recall'] = float(sum(recalls))/len(recalls)
+            recalls = results[percent][fn]['recalls']
+            results[percent][fn]['recall'] = sum(recalls) / len(recalls)
 
 
-    pprint(results)
-    results = {'results': results, 'percentages': percentages}
-    with open('results', 'w') as f:
+    results = {'results': results, 'testset': testset['name']}
+    fname = "results_{}".format(datetime.datetime.now().strftime("%Y%m%d%H%m%S"))
+    with open(fname, 'w') as f:
         pickle.dump(results, f)
-    graph(results)
+    graph(fname)
 
-def test_rocchio(testset=ts.TEST_3):
+
+def graph(fname):   
+    with open(fname) as f:
+        results = pickle.load(f)
+        testset = results['testset']
+        results = results['results']
+
+        font_name='/home/alexm/.fonts/Myriad/MyriadPro-SemiCn.otf'
+        tic_font = FontProperties(fname=font_name)
+        legend_font = FontProperties(fname=font_name)
+        title_font = FontProperties(fname=font_name, size='x-large')    
+
+        mean = lambda vals: sum(vals) / len(vals)
+        median = np.median              
+        
+        for fn in ['mean', 'median']:
+            fig, ax = plt.subplots(1)
+            ax.set_title(fn.capitalize())
+            ax.title.set_fontproperties(title_font)
+
+            for vec_fn in VEC_ADJ_FNS:
+                x_axis = sorted(results.keys())
+                y_axis = [eval(fn)(results[percent][vec_fn]['recalls']) for percent in x_axis]
+
+                ppl.plot(ax, x_axis, y_axis, label=vec_fn, linewidth=2)
+
+            for label in ax.get_xticklabels():
+                label.set_fontproperties(tic_font)
+
+            for label in ax.get_yticklabels():
+                label.set_fontproperties(tic_font)
+
+            ax.set_xlabel('Starting (%)')
+            ax.set_ylabel('Recall (%)')
+
+            # Shink current axis's height by 10% on the bottom
+            box = ax.get_position()
+            ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                             box.width, box.height * 0.9])
+
+            # Put a legend below current axis
+            ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
+                      fancybox=True, shadow=True, ncol=5, prop=legend_font)
+
+            fig.savefig('line_plot_{}_{}.png'.format(fn, testset))
+
+        fig, ax = plt.subplots(1)
+        ax.set_title('Recalls')
+        ax.title.set_fontproperties(title_font)
+        colors = {'rocchio': 'green',
+                  'ide_dec': 'red',
+                  'ide_regular': 'blue'}
+        percents = sorted(results.keys())
+        for vec_fn in VEC_ADJ_FNS:
+                # intermediate variables are for plebs
+                x, y = zip(*[item for sublist in [[(percent, val) for val in results[percent][vec_fn]['recalls']] for percent in percents] for item in sublist])
+                ppl.scatter(ax, x, y, label=vec_fn, facecolor=colors[vec_fn], alpha=0.5)
+
+        for label in ax.get_xticklabels():
+            label.set_fontproperties(tic_font)
+
+        for label in ax.get_yticklabels():
+            label.set_fontproperties(tic_font)
+
+        ax.set_xlabel('Starting (%)')
+        ax.set_ylabel('Recall (%)')
+
+        # Shink current axis's height by 10% on the bottom
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                         box.width, box.height * 0.9])
+
+        # Put a legend below current axis
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
+                  fancybox=True, shadow=True, ncol=5, prop=legend_font)
+
+        fig.savefig('scatter_plot_{}.png'.format(testset))
+
+def test_rocchio(testset=ts.TEST_5):
     instance = testset['instance']
     relevant = testset['relevant']
     irrelevant = testset['irrelevant']
@@ -185,132 +263,40 @@ def test_rocchio(testset=ts.TEST_3):
 def graph_rocchio(fname):
     with open(fname) as f:
         results = pickle.load(f)
-        percent = .1
-        x = []
-        y = []
-        z = []
-        for alpha_pl in results[percent]:
-            for alpha_mi in results[percent][alpha_pl]:
-                x.append(alpha_pl)
-                y.append(alpha_mi)
-                recalls = results[percent][alpha_pl][alpha_mi]['recalls']
-                z.append(sum(recalls) / len(recalls))
+        for percent in results.keys():
+            x = []
+            y = []
+            z = []
+            for alpha_pl in results[percent]:
+                for alpha_mi in results[percent][alpha_pl]:
+                    x.append(alpha_pl)
+                    y.append(alpha_mi)
+                    recalls = results[percent][alpha_pl][alpha_mi]['recalls']
+                    z.append(sum(recalls) / len(recalls))
 
-    fig = plt.figure()
-    ax = fig.gca(projection='3d')
-    xi = np.linspace(min(x), max(x))
-    yi = np.linspace(min(y), max(y))
-    X, Y = np.meshgrid(xi, yi)
-    Z = griddata(x, y, z, xi, yi)
+            fig = plt.figure()
+            ax = fig.gca(projection='3d')
+            xi = np.linspace(min(x), max(x))
+            yi = np.linspace(min(y), max(y))
+            X, Y = np.meshgrid(xi, yi)
+            Z = griddata(x, y, z, xi, yi)
 
-    surf = ax.plot_surface(X, Y, Z, rstride=5, cstride=5, cmap=cm.jet,
-                           linewidth=1, antialiased=True)
-    ax.set_zlim3d(np.min(Z), np.max(Z))
-    fig.colorbar(surf)
+            surf = ax.plot_surface(X, Y, Z, rstride=5, cstride=5, cmap=cm.jet,
+                                   linewidth=1, antialiased=True)
+            ax.set_zlim3d(np.min(Z), np.max(Z))
+            fig.colorbar(surf)
 
-    ax.set_xlabel('alpha+')
-    ax.set_ylabel('alpha-')
-    ax.set_zlabel('recall')
+            ax.set_xlabel('alpha+')
+            ax.set_ylabel('alpha-')
+            ax.set_zlabel('recall')
 
-    plt.show()
-
-def graph(res_dict):    
-    results = res_dict['results']
-    percentages = res_dict['percentages']
-    y_list_mean = []
-    y_list_median = []
-
-    points = {'rocchio':     {'x': [],
-                              'y': []},
-              'ide_dec':     {'x': [],
-                              'y': []},
-              'ide_regular': {'x': [],
-                              'y': []}}
-
-    label_list = []
-    for fn in VEC_ADJ_FNS:
-        mean_list = []
-        median_list = []
-        points_list = []
-        for index in range(len(percentages)):
-            mean_list.append(results[index][fn]['recall'])
-            median_list.append(numpy.median(results[index][fn]['recalls']))
-
-            points[fn]['x'].extend([percentages[index]] * SAMPLES)
-            points[fn]['y'].extend(results[index][fn]['recalls'])
-
-
-        y_list_mean.append(tuple(mean_list))
-        y_list_median.append(tuple(median_list))
-
-        label_list.append(fn)
-    x_list = [percentages] * len(y_list_mean)
-
-    fname='/home/alexm/.fonts/Myriad/MyriadPro-SemiCn.otf'
-    tic_font = FontProperties(fname=fname)
-    legend_font = FontProperties(fname=fname)
-    title_font = FontProperties(fname=fname, size='x-large')
-    for fn in ['mean', 'median']:
-        fig, ax = plt.subplots(1)
-        ax.set_title(fn.capitalize())
-        ax.title.set_fontproperties(title_font)
-        for x, y, label in zip(x_list, eval('y_list_'+fn), label_list):
-            ppl.plot(ax, x, y, label=label, linewidth=2)
-
-        for label in ax.get_xticklabels():
-            label.set_fontproperties(tic_font)
-
-        for label in ax.get_yticklabels():
-            label.set_fontproperties(tic_font)
-
-        ax.set_xlabel('Starting (%)')
-        ax.set_ylabel('Recall (%)')
-
-        # Shink current axis's height by 10% on the bottom
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0 + box.height * 0.1,
-                         box.width, box.height * 0.9])
-
-        # Put a legend below current axis
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
-                  fancybox=True, shadow=True, ncol=5, prop=legend_font)
-
-        fig.savefig('line_plot_{}_{}_samples.png'.format(fn, SAMPLES))
-
-    fig, ax = plt.subplots(1)
-    ax.set_title('Recalls')
-    ax.title.set_fontproperties(title_font)
-    colors = {'rocchio': 'green',
-              'ide_dec': 'red',
-              'ide_regular': 'blue'}
-    for fn, xy in points.iteritems():
-        jitter = .05
-        xs = [x + random.uniform(-jitter, jitter) for x in xy['x']]
-        ppl.scatter(ax, xy['x'], xy['y'], label=fn, facecolor=colors[fn], alpha=0.5)
-
-    for label in ax.get_xticklabels():
-        label.set_fontproperties(tic_font)
-
-    for label in ax.get_yticklabels():
-        label.set_fontproperties(tic_font)
-
-    ax.set_xlabel('Starting (%)')
-    ax.set_ylabel('Recall (%)')
-
-    # Shink current axis's height by 10% on the bottom
-    box = ax.get_position()
-    ax.set_position([box.x0, box.y0 + box.height * 0.1,
-                     box.width, box.height * 0.9])
-
-    # Put a legend below current axis
-    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
-              fancybox=True, shadow=True, ncol=5, prop=legend_font)
-
-    fig.savefig('scatter_plot_{}_samples.png'.format(SAMPLES))
+            plt.show()
 
 
 
 if __name__ == "__main__":
     #sendStringQuery("test")
     #print(sendQuery(vector_query='true', instance='shakespeare', relevant=[19498]))
-    graph_rocchio(test_rocchio())
+    #graph_rocchio(test_rocchio())
+    test()
+    #graph('results_20131209011200')

@@ -277,9 +277,9 @@ Return:
 	}
 */
 function process_relevance_feedback($query, $relevant, $irrelevant,
-									$vec_func='rocchio', $alpha=1){
+									$vec_func='rocchio', $alpha_plus=.75, $alpha_minus=.25){
 	$t1 = time();
-	$new_query = calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func, $alpha);
+	$new_query = calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func, $alpha_plus, $alpha_minus);
 	$t2 = time();
 	$sentences = retrieve_sentences_from_vector_query($new_query);
 	$t3 = time();
@@ -294,8 +294,8 @@ function process_relevance_feedback($query, $relevant, $irrelevant,
 
 function calculate_new_vector_query($query, $relevant, $irrelevant,
 									$vec_func='rocchio',
-									$alpha_plus=1,
-									$alpha_minus=1){
+									$alpha_plus=.75,
+									$alpha_minus=.25){
 	$features = (array) $query['features'];
 	$vector_query = new SparseVector($features);
 	$vector_query->normalize();
@@ -399,7 +399,9 @@ function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relev
 
 //vector adjustment: Rocchio
 function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant,
-									   $alpha_plus=1, $alpha_minus=1){
+									   $alpha_plus=.75, $alpha_minus=.25){
+	error_log($alpha_plus);
+	error_log($alpha_minus);
 	$already_relevant = (array) $query['relevant'];
 	$already_irrelevant = (array) $query['irrelevant'];
 	

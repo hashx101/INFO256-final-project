@@ -2,7 +2,8 @@
 # Shakespeare: life is a stage
 TEST_1 = {'relevant': [4779, 19498, 30066, 32111, 32715, 43494, 48981, 54363, 68009, 93470],
 		  'irrelevant': [],
-		  'instance': 'shakespeare'}
+		  'instance': 'shakespeare',
+		  'name': 'life_is_a_stage'}
 
 
 # dating: black individual seeking 'x'
@@ -16,7 +17,8 @@ TEST_2 = {'relevant': [340, 348, 357, 599, 798, 836, 853, 1322, 1343, 1356, 1429
 		  'irrelevant': [132, 216, 405, 440, 516, 824, 947, 1122, 1713, 2099, 2222, 2227, 2524,
 		  				 2526, 3056, 3106, 3405, 3796, 3977, 4135, 5041, 5112, 5296, 5544, 5568,
 		  				 5667],
-		  'instance': 'personals'}
+		  'instance': 'personals',
+		  'name': 'black'}
 
 # dating: black individual seeking 'x'
 TEST_3 = {'relevant': [340, 348, 357, 599, 798, 836, 853, 1322, 1343, 1356, 1429, 1450, 1508,
@@ -27,7 +29,8 @@ TEST_3 = {'relevant': [340, 348, 357, 599, 798, 836, 853, 1322, 1343, 1356, 1429
 					   4983, 4991, 5091, 5221, 5306, 5421, 5433, 5437, 5510, 5528, 5626, 5665,
 					   5669, 5682],
 		  'irrelevant': [],
-		  'instance': 'personals'}
+		  'instance': 'personals',
+		  'name': 'black_no_irrelevant'}
 
 # years old: old
 # search key: old, relevant are those related to years old, irrelevant otherwise
@@ -38,7 +41,8 @@ TEST_4 = {'relevant':[6, 104, 126, 166, 171, 266, 285, 327, 425, 440, 446, 740, 
                     4213, 4547, 4636, 4717, 4737, 4981, 4993, 5016, 5065, 5262, 5619, 5636, 
                     5711, 5731],
         'irrelevant': [19, 101, 1886, 1903, 2247, 2533, 2610, 3672, 4078, 5145, 5211, 5660],
-        'instance': 'personals'
+        'instance': 'personals',
+		'name': 'old'
 }
 
 
@@ -46,5 +50,6 @@ TEST_4 = {'relevant':[6, 104, 126, 166, 171, 266, 285, 327, 425, 440, 446, 740, 
 TEST_5 = {
 	'relevant': [1343, 1356, 1505, 1976, 2002, 2163, 2274, 2330, 2379, 2386, 2492, 2512, 2601, 2764, 2771, 4117, 4143, 4327, 4432, 4436, 4741, 5183, 5521, 5568, 5719],
     'irrelevant': [364, 513, 552, 738, 3352],
-    'instance': 'personals'
+    'instance': 'personals',
+	'name': 'curvy'
     }
