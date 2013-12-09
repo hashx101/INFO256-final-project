@@ -96,6 +96,9 @@ A JSON response is sent to the client, containing the following data:
 **/
 dispatch();
 function dispatch(){
+	global $ALPHA_plus;
+	global $ALPHA_minus;
+
 	$result = array();
 	if($_POST['string_query'] == "true"){
 		$current_query = decodePostJSON('vector_query');
@@ -113,11 +116,26 @@ function dispatch(){
 		else{
 			$vector_function = "rocchio";
 		}
+
+		if(array_key_exists('alpha_plus', $_POST)) {
+			$alpha_plus = $_POST['alpha_plus'];
+		}
+		else{
+			$alpha_plus = $ALPHA_plus;
+		}
+
+		if(array_key_exists('alpha_minus', $_POST)){
+			$alpha_minus = $_POST['alpha_minus'];
+		}
+		else {
+			$alpha_minus = $ALPHA_minus;
+		}
 		error_log('Using ' . $vector_function);
 		
 		$query = (array) json_decode($_POST['query']);
 		$result = process_relevance_feedback($query, 
-			$relevant_sentences, $irrelevant_sentences, $vector_function);
+			$relevant_sentences, $irrelevant_sentences,
+			$vector_function, $alpha_plus, $alpha_minus);
 		//$relevant_sentences, $irrelevant_sentences);
 		
 	}
@@ -258,9 +276,10 @@ Return:
 	query:{featureID:floating-point value, ...}
 	}
 */
-function process_relevance_feedback($query, $relevant, $irrelevant, $vec_func='rocchio'){
+function process_relevance_feedback($query, $relevant, $irrelevant,
+									$vec_func='rocchio', $alpha=1){
 	$t1 = time();
-	$new_query = calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func);
+	$new_query = calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func, $alpha);
 	$t2 = time();
 	$sentences = retrieve_sentences_from_vector_query($new_query);
 	$t3 = time();
@@ -273,7 +292,10 @@ function process_relevance_feedback($query, $relevant, $irrelevant, $vec_func='r
 	return $result;
 }
 
-function calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func='rocchio'){
+function calculate_new_vector_query($query, $relevant, $irrelevant,
+									$vec_func='rocchio',
+									$alpha_plus=1,
+									$alpha_minus=1){
 	$features = (array) $query['features'];
 	$vector_query = new SparseVector($features);
 	$vector_query->normalize();
@@ -285,7 +307,9 @@ function calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func='r
 	'ide_regular' => 'calculate_sentence_adjustment_ide_regular'
 	);
 	$fn = $fns[$vec_func];
-	$sentence_adjustment = $fn($query, $vector_query, $relevant, $irrelevant);
+	$sentence_adjustment = $fn($query, $vector_query,
+							   $relevant, $irrelevant,
+							   $alpha_plus, $alpha_minus);
 	
 	//$sentence_adjustment = calculate_sentence_adjustment($query, $vector_query, 
 	//	$relevant, $irrelevant);
@@ -301,8 +325,8 @@ function calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func='r
 
 // vector adjustment: Ide dec-hi
 
-function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant, $irrelevant){
-	GLOBAL $ALPHA_w_plus;
+function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant,
+											   $irrelevant, $alpha_plus=1, $alpha_minus=-1){
 	$already_relevant = (array) $query['relevant'];
 	$already_irrelevant = (array) $query['irrelevant'];
 	
@@ -313,6 +337,7 @@ function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant,
 	$descend_irrelevant = retrieve_sentences_from_vector_query($irrelevant);
 	//get the id of the least relevant(the first one)
 	$top_irrelevant = array_shift(array_values($descend_irrelevant));
+
 	
 	$new_irrelevant = array_subtract($already_irrelevant, $top_irrelevant);
 	$no_longer_irrelevant = array_subtract($top_irrelevant, $already_irrelevant);
@@ -322,13 +347,13 @@ function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant,
 	$irrelevant_vect = convert_sentence_IDs_to_sparse_vector($new_irrelevant);
 	$no_longer_irrelevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_irrelevant);
 	
-	$positive_adjustment = $relevant_vect->scalarMultiply($ALPHA_w_plus);
+	$positive_adjustment = $relevant_vect->scalarMultiply(1);
 	
-	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1*$ALPHA_w_plus);
+	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1);
 	
-	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*$ALPHA_w_plus);
+	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1);
 	
-	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply($ALPHA_w_plus);
+	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply(1);
 	
 	$adjustment = $positive_adjustment->vectorAdd($negative_adjustment);
 	$adjustment = $adjustment->vectorAdd($no_longer_positive_adjustment);
@@ -337,8 +362,8 @@ function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant,
 }
 
 // vector adjustment: Ide regular
-function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relevant, $irrelevant){
-	GLOBAL $ALPHA_w_plus;
+function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relevant,
+												   $irrelevant, $alpha_plus=1, $alpha_minus=-1){
 	$already_relevant = (array) $query['relevant'];
 	$already_irrelevant = (array) $query['irrelevant'];
 	
@@ -357,13 +382,13 @@ function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relev
 	$no_longer_irrelevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_irrelevant);
 	//$no_longer_irrelevant_vect->normalize();
 	
-	$positive_adjustment = $relevant_vect->scalarMultiply($ALPHA_w_plus);
+	$positive_adjustment = $relevant_vect->scalarMultiply(1);
 	
-	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1*$ALPHA_w_plus);
+	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1);
 	
-	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*$ALPHA_w_plus);
+	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1);
 	
-	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply($ALPHA_w_plus);
+	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply(1);
 	
 	$adjustment = $positive_adjustment->vectorAdd($negative_adjustment);
 	$adjustment = $adjustment->vectorAdd($no_longer_positive_adjustment);
@@ -373,9 +398,8 @@ function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relev
 
 
 //vector adjustment: Rocchio
-function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant){
-	global $ALPHA_plus; // relevant sentences weight
-	global $ALPHA_minus; // irrelevant sentences weight
+function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant,
+									   $alpha_plus=1, $alpha_minus=1){
 	$already_relevant = (array) $query['relevant'];
 	$already_irrelevant = (array) $query['irrelevant'];
 	
@@ -397,13 +421,13 @@ function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrele
 	$no_longer_irrelevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_irrelevant);
 	$no_longer_irrelevant_vect->normalize();
 	
-	$positive_adjustment = $relevant_vect->scalarMultiply($ALPHA_plus);
+	$positive_adjustment = $relevant_vect->scalarMultiply($alpha_plus);
 	
-	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1*$ALPHA_plus);
+	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1*$alpha_plus);
 	
-	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*$ALPHA_minus);
+	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*$alpha_minus);
 	
-	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply($ALPHA_minus);
+	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply($alpha_minus);
 	
 	$adjustment = $positive_adjustment->vectorAdd($negative_adjustment);
 	$adjustment = $adjustment->vectorAdd($no_longer_positive_adjustment);

@@ -1,17 +1,20 @@
 from __future__ import print_function
+from __future__ import division
 
 
 from pprint import pprint
 from json import loads
 import urllib2
 import urllib
+import util
 import random
 import math
 import copy
 from collections import defaultdict
 import prettyplotlib as ppl
 import testsets as ts
-import numpy
+import numpy as np
+import datetime
 
 # prettyplotlib imports 
 from prettyplotlib import plt
@@ -21,8 +24,13 @@ from matplotlib.font_manager import FontProperties
 import random
 import pickle
 
+# for 3d graph
+from mpl_toolkits.mplot3d import Axes3D
+from matplotlib import cm
+from matplotlib.mlab import griddata
 
-SAMPLES = 50
+
+SAMPLES = 10
 HEADERS = {'User-Agent': ['Twisted Web Client'],
                  'Origin': ['http://localhost'],
                  'Accept-Language': ['en-US','en'],
@@ -43,7 +51,8 @@ def sendQuery(**kwargs):
             print('Derped on {}'.format(line))
 
 
-def sendStringQuery(string, instance="shakespeare"):
+def sendStringQuery(string,
+                    instance="shakespeare"):
     return sendQuery(query=string,
                      instance=instance,
                      string_query='true',
@@ -57,18 +66,21 @@ def sendVectorQuery(query={'relevant': [],
                     vector_function='rocchio',
                     instance="shakespeare",
                     relevant=[],
-                    irrelevant=[]):
-    # print('Calling vector query')
+                    irrelevant=[],
+                    alpha_plus=.75,
+                    alpha_minus=.25):
+
     return sendQuery(query=query,
                      vector_function=vector_function,
                      relevant=relevant,
                      irrelevant=irrelevant,
+                     alpha_plus=alpha_plus,
+                     alpha_minus=alpha_minus,
                      instance=instance,
                      string_query='false',
                      vector_query='true')
 
 def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
-    print('Calling feature query')
     return sendQuery(relevant=relevant,
                      irrelevant=irrelevant,
                      instance=instance,
@@ -77,7 +89,7 @@ def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
 
 VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
 
-def test(testset=ts.TEST_2):
+def test(testset=ts.TEST_3):
     instance = testset['instance']
     relevant = testset['relevant']
     irrelevant = testset['irrelevant']
@@ -123,7 +135,86 @@ def test(testset=ts.TEST_2):
         pickle.dump(results, f)
     graph(results)
 
-def graph(res_dict):
+def test_rocchio(testset=ts.TEST_3):
+    instance = testset['instance']
+    relevant = testset['relevant']
+    irrelevant = testset['irrelevant']
+
+    percentages = util.step_range(.1,.4,.1)
+    results = dict()
+
+    for percent in percentages:
+        results[percent] = {}
+        
+        alpha_pluses = util.step_range(0, 1, .25)
+        alpha_minuses = util.step_range(0, 1, .25)
+        for alpha_plus in alpha_pluses:
+            results[percent][alpha_plus] = {}
+
+            for alpha_minus in alpha_minuses:
+                print("Percentage: {} Alpha+: {} Alpha-: {}".format(percent, alpha_plus, alpha_minus))
+                results[percent][alpha_plus][alpha_minus] = {'recalls': []}
+                for sample_num in range(SAMPLES):
+                    relevant_sample = util.percent_sample(relevant, percent)
+                    irrelevant_sample = irrelevant
+
+                    response = sendVectorQuery(vector_function='rocchio',
+                                               relevant=relevant_sample,
+                                               irrelevant=irrelevant_sample,
+                                               instance=instance,
+                                               alpha_plus=alpha_plus,
+                                               alpha_minus=alpha_minus)
+
+                    relevant_returned = copy.copy(relevant_sample)
+                    relevent_set = set(relevant)
+                    relevant_sample_set = set(relevant_sample)
+                    for sentence in response['sentences']:
+                        sentence_id = int(sentence['id'])
+                        if sentence_id in relevant and sentence_id not in relevant_returned:
+                            relevant_returned.append(sentence_id)
+                    to_find = relevent_set.difference(relevant_sample_set)
+                    found = set(relevant_returned).difference(relevant_sample_set)
+
+                    results[percent][alpha_plus][alpha_minus]['recalls'].append(len(found) / max(.0000001, len(to_find)))
+    fname = 'results_rocchio_{}'.format(datetime.datetime.now().strftime("%Y%m%d%H%m%S"))
+    with open(fname, 'w') as f:
+        pickle.dump(results, f)
+    return fname
+
+
+def graph_rocchio(fname):
+    with open(fname) as f:
+        results = pickle.load(f)
+        percent = .1
+        x = []
+        y = []
+        z = []
+        for alpha_pl in results[percent]:
+            for alpha_mi in results[percent][alpha_pl]:
+                x.append(alpha_pl)
+                y.append(alpha_mi)
+                recalls = results[percent][alpha_pl][alpha_mi]['recalls']
+                z.append(sum(recalls) / len(recalls))
+
+    fig = plt.figure()
+    ax = fig.gca(projection='3d')
+    xi = np.linspace(min(x), max(x))
+    yi = np.linspace(min(y), max(y))
+    X, Y = np.meshgrid(xi, yi)
+    Z = griddata(x, y, z, xi, yi)
+
+    surf = ax.plot_surface(X, Y, Z, rstride=5, cstride=5, cmap=cm.jet,
+                           linewidth=1, antialiased=True)
+    ax.set_zlim3d(np.min(Z), np.max(Z))
+    fig.colorbar(surf)
+
+    ax.set_xlabel('alpha+')
+    ax.set_ylabel('alpha-')
+    ax.set_zlabel('recall')
+
+    plt.show()
+
+def graph(res_dict):    
     results = res_dict['results']
     percentages = res_dict['percentages']
     y_list_mean = []
@@ -222,4 +313,4 @@ def graph(res_dict):
 if __name__ == "__main__":
     #sendStringQuery("test")
     #print(sendQuery(vector_query='true', instance='shakespeare', relevant=[19498]))
-    test()
+    graph_rocchio(test_rocchio())
