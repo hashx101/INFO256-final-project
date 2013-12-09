@@ -9,13 +9,18 @@ import random
 import math
 import copy
 from collections import defaultdict
-import pylab
+import prettyplotlib as ppl
 import testsets as ts
 import numpy
 
+# prettyplotlib imports 
+from prettyplotlib import plt
+from prettyplotlib import mpl
+from prettyplotlib import brewer2mpl
+from matplotlib.font_manager import FontProperties
 
 
-
+SAMPLES = 100
 HEADERS = {'User-Agent': ['Twisted Web Client'],
                  'Origin': ['http://localhost'],
                  'Accept-Language': ['en-US','en'],
@@ -70,7 +75,7 @@ def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
 
 VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
 
-def test(testset=ts.TEST_3):
+def test(testset=ts.TEST_2):
     instance = testset['instance']
     relevant = testset['relevant']
     irrelevant = testset['irrelevant']
@@ -80,7 +85,7 @@ def test(testset=ts.TEST_3):
         results[index] = {}
         for fn in VEC_ADJ_FNS:
             results[index][fn] = {'recalls': []}
-        for _ in range(5):
+        for _ in range(SAMPLES):
             # sample percent of subset for running fns against
             relevant_sample = random.sample(relevant, int(math.ceil(len(relevant) * percent)))
             irrelevant_sample = irrelevant
@@ -106,29 +111,95 @@ def test(testset=ts.TEST_3):
 
     pprint(results)
 
-    y_list = []
+    y_list_mean = []
+    y_list_median = []
+
+    points = {'rocchio': {'x': [],
+                          'y': []},
+              'ide_dec': {'x': [],
+                          'y': []},
+              'ide_regular': {'x': [],
+                              'y': []}}
+
     label_list = []
-    offset = 0
     for fn in VEC_ADJ_FNS:
         mean_list = []
         median_list = []
+        points_list = []
         for index in range(len(percentages)):
-            mean_list.append(results[index][fn]['recall'] + offset)
-            median_list.append(numpy.median(results[index][fn]['recalls']) + offset)
-        y_list.append(tuple(mean_list))
-        label_list.append(fn + ' mean')
-        y_list.append(tuple(median_list))
-        label_list.append(fn + ' median')
-        offset += .001
-    x_list = [percentages] * len(y_list)
-    graph(x_list, y_list, label_list)
+            mean_list.append(results[index][fn]['recall'])
+            median_list.append(numpy.median(results[index][fn]['recalls']))
+
+            points[fn]['x'].extend([percentages[index]] * SAMPLES)
+            points[fn]['y'].extend(results[index][fn]['recalls'])
 
 
-def graph(x_list, y_list, label_list):
-    for x, y, label in zip(x_list, y_list, label_list):
-        pylab.plot(x, y, label=label)
-    pylab.legend()
-    pylab.show()
+        y_list_mean.append(tuple(mean_list))
+        y_list_median.append(tuple(median_list))
+
+        label_list.append(fn)
+    x_list = [percentages] * len(y_list_mean)
+
+    fname='/home/alexm/.fonts/Myriad/MyriadPro-SemiCn.otf'
+    tic_font = FontProperties(fname=fname)
+    legend_font = FontProperties(fname=fname)
+    title_font = FontProperties(fname=fname, size='x-large')
+    for fn in ['mean', 'median']:
+        fig, ax = plt.subplots(1)
+        ax.set_title(fn.capitalize())
+        ax.title.set_fontproperties(title_font)
+        for x, y, label in zip(x_list, eval('y_list_'+fn), label_list):
+            ppl.plot(ax, x, y, label=label, linewidth=2)
+
+        for label in ax.get_xticklabels():
+            label.set_fontproperties(tic_font)
+
+        for label in ax.get_yticklabels():
+            label.set_fontproperties(tic_font)
+
+        ax.set_xlabel('Starting (%)')
+        ax.set_ylabel('Recall (%)')
+
+        # Shink current axis's height by 10% on the bottom
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                         box.width, box.height * 0.9])
+
+        # Put a legend below current axis
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
+                  fancybox=True, shadow=True, ncol=5, prop=legend_font)
+
+        fig.savefig('line_plot_{}_{}_samples.png'.format(fn, SAMPLES))
+
+    fig, ax = plt.subplots(1)
+    ax.set_title(fn.capitalize())
+    ax.title.set_fontproperties(title_font)
+    colors = {'rocchio': 'red',
+              'ide_dec': 'blue',
+              'ide_regular': 'green'}
+    for fn, xy in points.iteritems():
+        ppl.scatter(ax, xy['x'], xy['y'], label=fn, facecolor=colors[fn])
+
+    for label in ax.get_xticklabels():
+        label.set_fontproperties(tic_font)
+
+    for label in ax.get_yticklabels():
+        label.set_fontproperties(tic_font)
+
+    ax.set_xlabel('Starting (%)')
+    ax.set_ylabel('Recall (%)')
+
+    # Shink current axis's height by 10% on the bottom
+    box = ax.get_position()
+    ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                     box.width, box.height * 0.9])
+
+    # Put a legend below current axis
+    ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
+              fancybox=True, shadow=True, ncol=5, prop=legend_font)
+
+    fig.savefig('scatter_plot_{}_samples.png'.format(SAMPLES))
+
 
 
 if __name__ == "__main__":
