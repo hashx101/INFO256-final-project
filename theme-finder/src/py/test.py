@@ -22,29 +22,22 @@ from prettyplotlib import brewer2mpl
 from matplotlib import cm
 from matplotlib.mlab import griddata
 
-# headers for http queries
-HEADERS = {'User-Agent': ['Twisted Web Client'],
-           'Origin': ['http://localhost'],
-           'Accept-Language': ['en-US','en'],
-           'Content-Type': ['application/x-www-form-urlencoded'],
-           'Accept': ['*/*'],
-           'Referer': ['http://localhost/theme-finder/'],
-           'X-Requested-With': ['XMLHttpRequest'],
-           'Connection': ['keep-alive']}
 
-# defaults for functions, graphing as well
-DEF_SAMPLES = 3
+DEF_SAMPLES = 25
+DEF_START = .05
+DEF_END = .7
+DEF_STEP = .05
 DEF_INSTANCE = 'shakespeare'
 DEF_VEC_FN = 'rocchio'
 DEF_ALPHA = 1.0
 DEF_BETA = 0.75
-
 VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
 VEC_ADJ_FNS_PSEUDO = ['rocchio', 'ide_dec', 'ide_regular', 'pseudo']
 COLORS = {'rocchio': 'red',
           'ide_dec': 'blue',
           'ide_regular': 'green',
           'pseudo': 'purple'}
+
 
 def sendQuery(**kwargs):
     """
@@ -73,12 +66,13 @@ def sendStringQuery(query,
 
     Keyword arguments:
     instance -- name of database instance to query (default 'shakespeare')
-    vector_query -- a vector query object
+    vector_query -- the previous vector query object
     """
     return sendQuery(instance=instance,
                      string_query='true',
                      vector_query=vector_query,
                      query=query)
+
 
 def sendVectorQuery(instance=DEF_INSTANCE,
                     relevant=[],
@@ -90,15 +84,19 @@ def sendVectorQuery(instance=DEF_INSTANCE,
                            'irrelevant': [],
                            'features':   []}):
     """
-    A convenience function to make vector adjustment queryies to the server
+    A convenience function to make vector adjustment queries to the server
 
-
-    given a database instance name to query ('shakespeare' or 'personals'),
-    a list of relevant sentence ids, a list of irrelevant sentence ids, a
-    vector adjustment function name ('rocchio', 'ide_dec', 'ide_regular', or
-    'pseudo'), alpha, a float
+    Keyword arguments:
+    instance -- name of database instance to query (default 'shakespeare')
+    relevant -- a list of integers corresponding to relevant sentence ids
+    irrrelevant -- a list of integers corresponding to irrelevant sentence ids
+    vector_function -- the name of a vector adjustment function (default 'rocchio')
+    alpha -- a float with which to weight the old query by during the vector
+             adjustment (defualt 1.0)
+    beta -- (rocchio only) a float with which to weight the new relevant
+            sentences by during vector adjustment (default 0.75)
+    query -- the previous vector query object
     """
-
     return sendQuery(instance=instance,
                      string_query='false',
                      vector_query='true',
@@ -109,43 +107,56 @@ def sendVectorQuery(instance=DEF_INSTANCE,
                      beta=beta,
                      query=query)
 
-def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
-    return sendQuery(relevant=relevant,
-                     irrelevant=irrelevant,
-                     instance=instance,
-                     string_query='false',
-                     vector_query='true')
 
-def test(test_set=ts.TEST_2, test_fns=VEC_ADJ_FNS, samples=DEF_SAMPLES):
+def test(test_set=ts.TEST_2, test_fns=VEC_ADJ_FNS, samples=DEF_SAMPLES,
+         start=DEF_START, end=DEF_END, step=DEF_STEP, seed=random.random()):
+    """
+    Given a test set and a list of vector functions, checks recall rates
+    over varried starting percentages of the test set.
+
+    Keyword arguments:
+    test_set -- a dictionary containing the 'name' of the set, the database
+                'instance', the 'search_term' to use (only 'pseudo'), a list
+                of 'relevant' sentence ids, and a list of 'irrelevant'
+                sentence ids
+    test_fns -- a list of names of vector adjustment functions to use
+    samples -- the number of samples to run (default 3)
+    start -- a float corresponding to the starting sample percentage (default 0.05)
+    end -- a float corresponding to the ending sample percentage (default 0.6)
+    step -- a float corresponding to the sample percentage to step by (default 0.05)
+    seed -- the random seed to use
+    """
+    random.seed(seed)
+
+    # load information from the test set
+    test_set_name = test_set['name']
     instance = test_set['instance']
     relevant = test_set['relevant']
     irrelevant = test_set['irrelevant']
     search_term = test_set['search_term']
 
-
-    percentages = util.step_range(.1, .5, .05)
     results = {}
-    for percent in percentages:
+    for percent in util.step_range(start, end, step):
+        # instantiate dictionaries
         results[percent] = {}
         for fn in test_fns:
             results[percent][fn] = {'recalls': []}
+
         for sample_num in range(samples):
             print('Percent: {} Sample: {}'.format(percent, sample_num + 1))
-            relevant_sample = util.percent_sample(relevant, percent)
-            irrelevant_sample = irrelevant
-            for fn in test_fns:
-                if fn == 'pseudo':
-                    pseudo_query = sendStringQuery(query=search_term,
-                                                   instance=instance)['query']
-                    response = sendVectorQuery(vector_function=fn,
-                                               query=pseudo_query,
-                                               instance=instance)
-                else:
-                    response = sendVectorQuery(vector_function=fn,
-                                               relevant=relevant_sample,
-                                               irrelevant=irrelevant_sample,
-                                               instance=instance)
 
+            # take a random percentage of the relevant sentence ids
+            relevant_sample = util.percent_sample(relevant, percent)
+            # currently we take all irrelevant sentence ids, so this isn't a sampling
+            irrelevant_sample = irrelevant
+
+            for fn in test_fns:
+                response = sendVectorQuery(vector_function=fn,
+                                           relevant=relevant_sample,
+                                           irrelevant=irrelevant_sample,
+                                           instance=instance)
+
+                # find which sentences were recalled
                 relevant_returned = copy.copy(relevant_sample)
                 relevent_set = set(relevant)
                 relevant_sample_set = set(relevant_sample)
@@ -156,26 +167,41 @@ def test(test_set=ts.TEST_2, test_fns=VEC_ADJ_FNS, samples=DEF_SAMPLES):
                 to_find = relevent_set.difference(relevant_sample_set)
                 found = set(relevant_returned).difference(relevant_sample_set)
 
-
+                # kludgy fix for when user gives percentage range to 100
                 results[percent][fn]['recalls'].append(len(found) / max(.0000001, len(to_find)))
             
         for fn in test_fns:
             recalls = results[percent][fn]['recalls']
             results[percent][fn]['recall'] = sum(recalls) / len(recalls)
 
+    results = {'results': results,
+               'test_set': test_set_name,
+               'vector_functions': test_fns,
+               'start_percentage': start,
+               'end_percentage': end,
+               'step_percentage': step,
+               'seed': seed}
 
-    results = {'results': results, 'test_set': test_set['name']}
-    fname = "results_{}".format(datetime.datetime.now().strftime("%Y%m%d%H%m%S"))
+    # save file and graph
+    fname = "results_name_{}".format(datetime.datetime.now().strftime("%Y%m%d_%H%m%S"))
     with open(fname, 'w') as f:
         pickle.dump(results, f)
-    graph(fname, test_fns)
+    graph(fname)
 
 
-def graph(fname, fns):   
+def graph(fname):   
+    """
+    Graphs mean and median of vector functions over a given starting
+    percentage of relevant sentence ids.
+
+    Arguments:
+    fname -- the filename of the pickled output
+    """
     with open(fname) as f:
         results = pickle.load(f)
         test_set = results['test_set']
         results = results['results']  
+        fns = results['vector_functions']
 
         mean = lambda vals: sum(vals) / len(vals)
         median = np.median              
@@ -223,6 +249,7 @@ def graph(fname, fns):
                   fancybox=True, shadow=True, ncol=5)
 
         fig.savefig('scatter_plot_{}.png'.format(test_set))
+
 
 def test_rocchio(test_set=ts.TEST_2, samples=DEF_SAMPLES):
     instance = test_set['instance']
@@ -302,7 +329,6 @@ def graph_rocchio(fname):
             ax.set_zlabel('recall')
 
             plt.show()
-
 
 
 if __name__ == "__main__":

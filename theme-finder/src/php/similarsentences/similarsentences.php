@@ -140,7 +140,6 @@ function dispatch(){
 		$result = process_relevance_feedback($query, 
 			$relevant_sentences, $irrelevant_sentences,
 			$vector_function, $alpha, $beta);
-		//$relevant_sentences, $irrelevant_sentences);
 		
 	}
 	echo json_encode($result);
@@ -281,7 +280,7 @@ Return:
 	}
 */
 function process_relevance_feedback($query, $relevant, $irrelevant,
-									$vec_func='rocchio', $alpha=0, $beta=.75){
+									$vec_func='rocchio', $alpha=1, $beta=.75){
 	$t1 = time();
 	$new_query = calculate_new_vector_query($query, $relevant, $irrelevant, $vec_func, $alpha, $beta);
 	$t2 = time();
@@ -318,12 +317,8 @@ function calculate_new_vector_query($query, $relevant, $irrelevant,
 	'pseudo' => 'calculate_sentence_adjustment_pseudo'
 	);
 	$fn = $fns[$vec_func];
-	$sentence_adjustment = $fn($query, $vector_query,
-							   $relevant, $irrelevant,
-							   $alpha, $beta);
-	
-	//$sentence_adjustment = calculate_sentence_adjustment($query, $vector_query, 
-	//	$relevant, $irrelevant);
+	$sentence_adjustment = $fn($query, $vector_query, $relevant, $irrelevant, $beta);
+
 	$vector_query = $vector_query->scalarMultiply($alpha);
 	$new_query = $vector_query->vectorAdd($sentence_adjustment);
 	$new_query->normalize();
@@ -335,10 +330,9 @@ function calculate_new_vector_query($query, $relevant, $irrelevant,
 }
 
 
-// vector adjustment: Ide dec-hi
-
+// vector adjustment: Ide dec hi
 function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant,
-											   $irrelevant, $alpha=0, $beta=1){
+											   $irrelevant, $beta=.75){
 	$already_relevant = array_key_exists('relevant', $query) ? 
 										(array) $query['relevant'] :
 										array();
@@ -379,7 +373,7 @@ function calculate_sentence_adjustment_ide_dec($query, $vector_query, $relevant,
 
 // vector adjustment: Ide regular
 function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relevant,
-												   $irrelevant, $alpha=0, $beta=.75){
+												   $irrelevant, $beta=.75){
 	$already_relevant = array_key_exists('relevant', $query) ? 
 										(array) $query['relevant'] :
 										array();
@@ -418,8 +412,7 @@ function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relev
 
 
 //vector adjustment: Rocchio
-function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant,
-									   $alpha=0, $beta=.75){
+function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant, $beta=.75){
 	$already_relevant = array_key_exists('relevant', $query) ? 
 										(array) $query['relevant'] :
 										array();
@@ -461,12 +454,7 @@ function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrele
 }
 
 // pseudo
-function calculate_sentence_adjustment_pseudo($query, $vector_query, $relevant, $irrelevant,
-											$alpha=0, $beta=0.75){
-	GLOBAL $ALPHA_plus;
-	GLOBAL $ALPHA_minus;
-	#$already_relevant = (array) $query['relevant'];
-	#$already_irrelevant = (array) $query['irrelevant'];
+function calculate_sentence_adjustment_pseudo($query, $vector_query, $relevant, $irrelevant, $beta=0.75){
 	$already_relevant = array_key_exists('relevant', $query) ? 
 										(array) $query['relevant'] :
 										array();
@@ -474,45 +462,37 @@ function calculate_sentence_adjustment_pseudo($query, $vector_query, $relevant, 
 										(array) $query['irrelevant'] :
 										array();
 
-	// select top 50 sentences and treat them as relevant
-	$sentences = retrieve_sentences_from_vector_query($vector_query); // These are the sentences returned by the search.
-	$top50_relevant_sentences = array_slice($sentences, 0, 50); // These are the top 50 sentences
+	// retrieve sentences from vector query and take top 50
+	$sentences = retrieve_sentences_from_vector_query($vector_query);
+	$top50_relevant_sentences = array_slice($sentences, 0, 50);
+	
+	// extract just the sentence ids of these top 50
 	$top50_relevant = array();
 	foreach ($top50_relevant_sentences as $sent) {
-		array_push($top50_relevant, $sent['id']); // these are the top 50 sentence IDs
+		array_push($top50_relevant, $sent['id']);
 	}
-	$top50_relevant = array_subtract($top50_relevant, $irrelevant);
+	$top50_relevant = array_subtract($top50_relevant, $irrelevant); // remove irrelevant from top 50
 
+	// get diffs
 	$new_relevant = array_subtract($already_relevant, $top50_relevant);
 	$no_longer_relevant = array_subtract($top50_relevant, $already_relevant);
-	
 	$new_irrelevant = array_subtract($already_irrelevant, $irrelevant);
 	$no_longer_irrelevant = array_subtract($irrelevant, $already_irrelevant);
 	
 	// convert to vector and normalize
 	$relevant_vect = convert_sentence_IDs_to_sparse_vector($new_relevant);
 	$relevant_vect->normalize();
-	
 	$no_longer_relevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_relevant);
 	$no_longer_relevant_vect->normalize();
-	
 	$irrelevant_vect = convert_sentence_IDs_to_sparse_vector($new_irrelevant);
 	$irrelevant_vect->normalize();
-	
 	$no_longer_irrelevant_vect = convert_sentence_IDs_to_sparse_vector($no_longer_irrelevant);
 	$no_longer_irrelevant_vect->normalize();
 	
-	#$positve_adjustment = $relevant_vect->scalarMultiply($ALHPA_plus);
-	#$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1*$ALPHA_plus);
-	#$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*$ALPHA_minus);
-	#$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply($ALPHA_minus);
-	
+	// adjust with beta and gamma (1-beta)
 	$positive_adjustment = $relevant_vect->scalarMultiply($beta);
-	
 	$no_longer_positive_adjustment = $no_longer_relevant_vect->scalarMultiply(-1*$beta);
-	
 	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*(1 - $beta));
-	
 	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply(1-$beta);
 	
 	$adjustment = $positive_adjustment->vectorAdd($negative_adjustment);
