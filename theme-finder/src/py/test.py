@@ -30,7 +30,7 @@ from matplotlib import cm
 from matplotlib.mlab import griddata
 
 
-SAMPLES = 25
+SAMPLES = 15
 HEADERS = {'User-Agent': ['Twisted Web Client'],
                  'Origin': ['http://localhost'],
                  'Accept-Language': ['en-US','en'],
@@ -67,15 +67,15 @@ def sendVectorQuery(query={'relevant': [],
                     instance="shakespeare",
                     relevant=[],
                     irrelevant=[],
-                    alpha_plus=.75,
-                    alpha_minus=.25):
+                    alpha=0,
+                    beta=.75):
 
     return sendQuery(query=query,
                      vector_function=vector_function,
                      relevant=relevant,
                      irrelevant=irrelevant,
-                     alpha_plus=alpha_plus,
-                     alpha_minus=alpha_minus,
+                     alpha=alpha,
+                     beta=beta,
                      instance=instance,
                      string_query='false',
                      vector_query='true')
@@ -95,7 +95,7 @@ def test(testset=ts.TEST_3):
     irrelevant = testset['irrelevant']
 
 
-    percentages = util.step_range(.02, .7, .02)
+    percentages = util.step_range(.1, .5, .05)
     results = {}
     for percent in percentages:
         results[percent] = {}
@@ -158,7 +158,6 @@ def graph(fname):
             for vec_fn in VEC_ADJ_FNS:
                 x_axis = sorted(results.keys())
                 y_axis = [eval(fn)(results[percent][vec_fn]['recalls']) for percent in x_axis]
-
                 ppl.plot(ax, x_axis, y_axis, label=vec_fn, linewidth=2)
 
             for label in ax.get_xticklabels():
@@ -213,7 +212,7 @@ def graph(fname):
 
         fig.savefig('scatter_plot_{}.png'.format(testset))
 
-def test_rocchio(testset=ts.TEST_5):
+def test_rocchio(testset=ts.TEST_2):
     instance = testset['instance']
     relevant = testset['relevant']
     irrelevant = testset['irrelevant']
@@ -224,14 +223,14 @@ def test_rocchio(testset=ts.TEST_5):
     for percent in percentages:
         results[percent] = {}
         
-        alpha_pluses = util.step_range(0, 1, .25)
-        alpha_minuses = util.step_range(0, 1, .25)
-        for alpha_plus in alpha_pluses:
-            results[percent][alpha_plus] = {}
+        alphas = util.step_range(0, 1, .25)
+        betas = util.step_range(0, 1, .25)
+        for alpha in alphas:
+            results[percent][alpha] = {}
 
-            for alpha_minus in alpha_minuses:
-                print("Percentage: {} Alpha+: {} Alpha-: {}".format(percent, alpha_plus, alpha_minus))
-                results[percent][alpha_plus][alpha_minus] = {'recalls': []}
+            for beta in betas:
+                print("Percentage: {} Alpha: {} Beta: {}".format(percent, alpha, beta))
+                results[percent][alpha][beta] = {'recalls': []}
                 for sample_num in range(SAMPLES):
                     relevant_sample = util.percent_sample(relevant, percent)
                     irrelevant_sample = irrelevant
@@ -240,8 +239,8 @@ def test_rocchio(testset=ts.TEST_5):
                                                relevant=relevant_sample,
                                                irrelevant=irrelevant_sample,
                                                instance=instance,
-                                               alpha_plus=alpha_plus,
-                                               alpha_minus=alpha_minus)
+                                               alpha=alpha,
+                                               beta=beta)
 
                     relevant_returned = copy.copy(relevant_sample)
                     relevent_set = set(relevant)
@@ -253,7 +252,7 @@ def test_rocchio(testset=ts.TEST_5):
                     to_find = relevent_set.difference(relevant_sample_set)
                     found = set(relevant_returned).difference(relevant_sample_set)
 
-                    results[percent][alpha_plus][alpha_minus]['recalls'].append(len(found) / max(.0000001, len(to_find)))
+                    results[percent][alpha][beta]['recalls'].append(len(found) / max(.0000001, len(to_find)))
     fname = 'results_rocchio_{}'.format(datetime.datetime.now().strftime("%Y%m%d%H%m%S"))
     with open(fname, 'w') as f:
         pickle.dump(results, f)
@@ -267,11 +266,11 @@ def graph_rocchio(fname):
             x = []
             y = []
             z = []
-            for alpha_pl in results[percent]:
-                for alpha_mi in results[percent][alpha_pl]:
-                    x.append(alpha_pl)
-                    y.append(alpha_mi)
-                    recalls = results[percent][alpha_pl][alpha_mi]['recalls']
+            for alpha in results[percent]:
+                for beta in results[percent][alpha]:
+                    x.append(alpha)
+                    y.append(beta)
+                    recalls = results[percent][alpha][beta]['recalls']
                     z.append(sum(recalls) / len(recalls))
 
             fig = plt.figure()
@@ -286,8 +285,8 @@ def graph_rocchio(fname):
             ax.set_zlim3d(np.min(Z), np.max(Z))
             fig.colorbar(surf)
 
-            ax.set_xlabel('alpha+')
-            ax.set_ylabel('alpha-')
+            ax.set_xlabel('alpha')
+            ax.set_ylabel('beta')
             ax.set_zlabel('recall')
 
             plt.show()
@@ -297,6 +296,6 @@ def graph_rocchio(fname):
 if __name__ == "__main__":
     #sendStringQuery("test")
     #print(sendQuery(vector_query='true', instance='shakespeare', relevant=[19498]))
-    #graph_rocchio(test_rocchio())
-    test()
+    graph_rocchio(test_rocchio())
+    #test()
     #graph('results_20131209011200')
