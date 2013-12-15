@@ -81,7 +81,67 @@ def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
                      string_query='false',
                      vector_query='true')
 
-VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
+#VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
+VEC_ADJ_FNS = ['pseudo', 'ide_dec', 'ide_regular']
+
+
+def test_pseudo(testset=ts.TEST_3):
+    instance = testset['instance']
+    relevant = testset['relevant']
+    irrelevant = testset['irrelevant']
+
+
+    percentages = util.step_range(.1, .5, .05)
+    results = {}
+    for percent in percentages:
+        results[percent] = {}
+        for fn in VEC_ADJ_FNS:
+            results[percent][fn] = {'recalls': []}
+        for sample_num in range(SAMPLES):
+            print('Percent: {} Sample: {}'.format(percent, sample_num + 1))
+            relevant_sample = util.percent_sample(relevant, percent)
+            irrelevant_sample = irrelevant
+            for fn in VEC_ADJ_FNS:
+                if(fn == 'pseudo'):
+                    samples = relevant_sample + irrelevant_sample
+                    #response = sendStringQuery(string=samples,
+                    #                            instance=instance)
+                    response = sendVectorQuery(vector_function=fn,
+                                                relevant = samples,
+                                                irrelevant=[],
+                                                instance=instance)
+                    print (samples)
+                    print(response)
+                else:
+                    response = sendVectorQuery(vector_function=fn,
+                                               relevant=relevant_sample,
+                                               irrelevant=irrelevant_sample,
+                                               instance=instance)
+
+                relevant_returned = copy.copy(relevant_sample)
+                relevent_set = set(relevant)
+                relevant_sample_set = set(relevant_sample)
+                for sentence in response['sentences']:
+                    sentence_id = int(sentence['id'])
+                    if sentence_id in relevant and sentence_id not in relevant_returned:
+                        relevant_returned.append(sentence_id)
+                to_find = relevent_set.difference(relevant_sample_set)
+                found = set(relevant_returned).difference(relevant_sample_set)
+
+
+                results[percent][fn]['recalls'].append(len(found) / max(.0000001, len(to_find)))
+            
+        for fn in VEC_ADJ_FNS:
+            recalls = results[percent][fn]['recalls']
+            results[percent][fn]['recall'] = sum(recalls) / len(recalls)
+
+
+    results = {'results': results, 'testset': testset['name']}
+    fname = "results_{}".format(datetime.datetime.now().strftime("%Y%m%d%H%m%S"))
+    with open(fname, 'w') as f:
+        pickle.dump(results, f)
+    graph(fname)
+
 
 def test(testset=ts.TEST_3):
     instance = testset['instance']
@@ -290,6 +350,7 @@ def graph_rocchio(fname):
 if __name__ == "__main__":
     #sendStringQuery("test")
     #print(sendQuery(vector_query='true', instance='shakespeare', relevant=[19498]))
-    graph_rocchio(test_rocchio())
+    #graph_rocchio(test_rocchio())
     #test()
+    test_pseudo()
     #graph('results_20131209011200')
