@@ -17,14 +17,12 @@ import pickle
 from prettyplotlib import plt
 from prettyplotlib import mpl
 from prettyplotlib import brewer2mpl
-from matplotlib.font_manager import FontProperties
 
 # for 3d graph
 from matplotlib import cm
 from matplotlib.mlab import griddata
 
-
-SAMPLES = 10
+# headers for http queries
 HEADERS = {'User-Agent': ['Twisted Web Client'],
            'Origin': ['http://localhost'],
            'Accept-Language': ['en-US','en'],
@@ -34,7 +32,26 @@ HEADERS = {'User-Agent': ['Twisted Web Client'],
            'X-Requested-With': ['XMLHttpRequest'],
            'Connection': ['keep-alive']}
 
+# defaults for functions, graphing as well
+DEF_SAMPLES = 3
+DEF_INSTANCE = 'shakespeare'
+DEF_VEC_FN = 'rocchio'
+DEF_ALPHA = 1.0
+DEF_BETA = 0.75
+
+VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
+VEC_ADJ_FNS_PSEUDO = ['rocchio', 'ide_dec', 'ide_regular', 'pseudo']
+COLORS = {'rocchio': 'red',
+          'ide_dec': 'blue',
+          'ide_regular': 'green',
+          'pseudo': 'purple'}
+
 def sendQuery(**kwargs):
+    """
+    Sends a query to similarsentences.php with the given keyword arguments.
+    Expects JSON, but will handle invalid lines, returning a python dictionary
+    created from the first line of valid JSON.
+    """
     data = urllib.urlencode(kwargs)
     req = urllib2.Request('http://localhost/theme-finder/src/php/similarsentences/similarsentences.php', data)
     response = urllib2.urlopen(req)
@@ -45,34 +62,52 @@ def sendQuery(**kwargs):
             print('Derped on {}'.format(line))
 
 
-def sendStringQuery(string,
-                    instance="shakespeare"):
-    return sendQuery(query=string,
-                     instance=instance,
+def sendStringQuery(query,
+                    vector_query={'relevant':    [],
+                                   'irrelevant': [],
+                                   'features':   []},
+                    instance=DEF_INSTANCE):
+    """
+    A convenience function to make string queries to the server. Takes a
+    string, query.
+
+    Keyword arguments:
+    instance -- name of database instance to query (default 'shakespeare')
+    vector_query -- a vector query object
+    """
+    return sendQuery(instance=instance,
                      string_query='true',
-                     vector_query='false')
+                     vector_query=vector_query,
+                     query=query)
 
-
-
-def sendVectorQuery(query={'relevant': [],
-                           'irrelevant': [],
-                           'features': []},
-                    vector_function='rocchio',
-                    instance="shakespeare",
+def sendVectorQuery(instance=DEF_INSTANCE,
                     relevant=[],
                     irrelevant=[],
-                    alpha=1,
-                    beta=.75):
+                    vector_function=DEF_VEC_FN,
+                    alpha=DEF_ALPHA,
+                    beta=DEF_BETA,
+                    query={'relevant':   [],
+                           'irrelevant': [],
+                           'features':   []}):
+    """
+    A convenience function to make vector adjustment queryies to the server
 
-    return sendQuery(query=query,
-                     vector_function=vector_function,
+
+    given a database instance name to query ('shakespeare' or 'personals'),
+    a list of relevant sentence ids, a list of irrelevant sentence ids, a
+    vector adjustment function name ('rocchio', 'ide_dec', 'ide_regular', or
+    'pseudo'), alpha, a float
+    """
+
+    return sendQuery(instance=instance,
+                     string_query='false',
+                     vector_query='true',
                      relevant=relevant,
                      irrelevant=irrelevant,
+                     vector_function=vector_function,
                      alpha=alpha,
                      beta=beta,
-                     instance=instance,
-                     string_query='false',
-                     vector_query='true')
+                     query=query)
 
 def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
     return sendQuery(relevant=relevant,
@@ -81,37 +116,30 @@ def sendFeatureQuery(instance="shakespeare", relevant=[], irrelevant=[]):
                      string_query='false',
                      vector_query='true')
 
-#VEC_ADJ_FNS = ['rocchio', 'ide_dec', 'ide_regular']
-VEC_ADJ_FNS = ['pseudo', 'ide_dec', 'ide_regular']
-
-
-def test_pseudo(testset=ts.TEST_3):
-    instance = testset['instance']
-    relevant = testset['relevant']
-    irrelevant = testset['irrelevant']
+def test(test_set=ts.TEST_2, test_fns=VEC_ADJ_FNS, samples=DEF_SAMPLES):
+    instance = test_set['instance']
+    relevant = test_set['relevant']
+    irrelevant = test_set['irrelevant']
+    search_term = test_set['search_term']
 
 
     percentages = util.step_range(.1, .5, .05)
     results = {}
     for percent in percentages:
         results[percent] = {}
-        for fn in VEC_ADJ_FNS:
+        for fn in test_fns:
             results[percent][fn] = {'recalls': []}
-        for sample_num in range(SAMPLES):
+        for sample_num in range(samples):
             print('Percent: {} Sample: {}'.format(percent, sample_num + 1))
             relevant_sample = util.percent_sample(relevant, percent)
             irrelevant_sample = irrelevant
-            for fn in VEC_ADJ_FNS:
-                if(fn == 'pseudo'):
-                    samples = relevant_sample + irrelevant_sample
-                    #response = sendStringQuery(string=samples,
-                    #                            instance=instance)
+            for fn in test_fns:
+                if fn == 'pseudo':
+                    pseudo_query = sendStringQuery(query=search_term,
+                                                   instance=instance)['query']
                     response = sendVectorQuery(vector_function=fn,
-                                                relevant = samples,
-                                                irrelevant=[],
-                                                instance=instance)
-                    print (samples)
-                    print(response)
+                                               query=pseudo_query,
+                                               instance=instance)
                 else:
                     response = sendVectorQuery(vector_function=fn,
                                                relevant=relevant_sample,
@@ -131,75 +159,23 @@ def test_pseudo(testset=ts.TEST_3):
 
                 results[percent][fn]['recalls'].append(len(found) / max(.0000001, len(to_find)))
             
-        for fn in VEC_ADJ_FNS:
+        for fn in test_fns:
             recalls = results[percent][fn]['recalls']
             results[percent][fn]['recall'] = sum(recalls) / len(recalls)
 
 
-    results = {'results': results, 'testset': testset['name']}
+    results = {'results': results, 'test_set': test_set['name']}
     fname = "results_{}".format(datetime.datetime.now().strftime("%Y%m%d%H%m%S"))
     with open(fname, 'w') as f:
         pickle.dump(results, f)
-    graph(fname)
+    graph(fname, test_fns)
 
 
-def test(testset=ts.TEST_3):
-    instance = testset['instance']
-    relevant = testset['relevant']
-    irrelevant = testset['irrelevant']
-
-
-    percentages = util.step_range(.1, .5, .05)
-    results = {}
-    for percent in percentages:
-        results[percent] = {}
-        for fn in VEC_ADJ_FNS:
-            results[percent][fn] = {'recalls': []}
-        for sample_num in range(SAMPLES):
-            print('Percent: {} Sample: {}'.format(percent, sample_num + 1))
-            relevant_sample = util.percent_sample(relevant, percent)
-            irrelevant_sample = irrelevant
-            for fn in VEC_ADJ_FNS:
-                response = sendVectorQuery(vector_function=fn,
-                                           relevant=relevant_sample,
-                                           irrelevant=irrelevant_sample,
-                                           instance=instance)
-
-                relevant_returned = copy.copy(relevant_sample)
-                relevent_set = set(relevant)
-                relevant_sample_set = set(relevant_sample)
-                for sentence in response['sentences']:
-                    sentence_id = int(sentence['id'])
-                    if sentence_id in relevant and sentence_id not in relevant_returned:
-                        relevant_returned.append(sentence_id)
-                to_find = relevent_set.difference(relevant_sample_set)
-                found = set(relevant_returned).difference(relevant_sample_set)
-
-
-                results[percent][fn]['recalls'].append(len(found) / max(.0000001, len(to_find)))
-            
-        for fn in VEC_ADJ_FNS:
-            recalls = results[percent][fn]['recalls']
-            results[percent][fn]['recall'] = sum(recalls) / len(recalls)
-
-
-    results = {'results': results, 'testset': testset['name']}
-    fname = "results_{}".format(datetime.datetime.now().strftime("%Y%m%d%H%m%S"))
-    with open(fname, 'w') as f:
-        pickle.dump(results, f)
-    graph(fname)
-
-
-def graph(fname):   
+def graph(fname, fns):   
     with open(fname) as f:
         results = pickle.load(f)
-        testset = results['testset']
-        results = results['results']
-
-        font_name='/home/alexm/.fonts/Myriad/MyriadPro-SemiCn.otf'
-        tic_font = FontProperties(fname=font_name)
-        legend_font = FontProperties(fname=font_name)
-        title_font = FontProperties(fname=font_name, size='x-large')    
+        test_set = results['test_set']
+        results = results['results']  
 
         mean = lambda vals: sum(vals) / len(vals)
         median = np.median              
@@ -207,18 +183,10 @@ def graph(fname):
         for fn in ['mean', 'median']:
             fig, ax = plt.subplots(1)
             ax.set_title(fn.capitalize())
-            ax.title.set_fontproperties(title_font)
-
-            for vec_fn in VEC_ADJ_FNS:
+            for vec_fn in fns:
                 x_axis = sorted(results.keys())
                 y_axis = [eval(fn)(results[percent][vec_fn]['recalls']) for percent in x_axis]
                 ppl.plot(ax, x_axis, y_axis, label=vec_fn, linewidth=2)
-
-            for label in ax.get_xticklabels():
-                label.set_fontproperties(tic_font)
-
-            for label in ax.get_yticklabels():
-                label.set_fontproperties(tic_font)
 
             ax.set_xlabel('Starting (%)')
             ax.set_ylabel('Recall (%)')
@@ -230,27 +198,17 @@ def graph(fname):
 
             # Put a legend below current axis
             ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
-                      fancybox=True, shadow=True, ncol=5, prop=legend_font)
+                      fancybox=True, shadow=True, ncol=5)
 
-            fig.savefig('line_plot_{}_{}.png'.format(fn, testset))
+            fig.savefig('line_plot_{}_{}.png'.format(fn, test_set))
 
         fig, ax = plt.subplots(1)
         ax.set_title('Recalls')
-        ax.title.set_fontproperties(title_font)
-        colors = {'rocchio': 'green',
-                  'ide_dec': 'red',
-                  'ide_regular': 'blue'}
         percents = sorted(results.keys())
-        for vec_fn in VEC_ADJ_FNS:
+        for vec_fn in fns:
                 # intermediate variables are for plebs
                 x, y = zip(*[item for sublist in [[(percent, val) for val in results[percent][vec_fn]['recalls']] for percent in percents] for item in sublist])
-                ppl.scatter(ax, x, y, label=vec_fn, facecolor=colors[vec_fn], alpha=0.5)
-
-        for label in ax.get_xticklabels():
-            label.set_fontproperties(tic_font)
-
-        for label in ax.get_yticklabels():
-            label.set_fontproperties(tic_font)
+                ppl.scatter(ax, x, y, label=vec_fn, facecolor=COLORS[vec_fn], alpha=0.5)
 
         ax.set_xlabel('Starting (%)')
         ax.set_ylabel('Recall (%)')
@@ -262,14 +220,14 @@ def graph(fname):
 
         # Put a legend below current axis
         ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
-                  fancybox=True, shadow=True, ncol=5, prop=legend_font)
+                  fancybox=True, shadow=True, ncol=5)
 
-        fig.savefig('scatter_plot_{}.png'.format(testset))
+        fig.savefig('scatter_plot_{}.png'.format(test_set))
 
-def test_rocchio(testset=ts.TEST_2):
-    instance = testset['instance']
-    relevant = testset['relevant']
-    irrelevant = testset['irrelevant']
+def test_rocchio(test_set=ts.TEST_2, samples=DEF_SAMPLES):
+    instance = test_set['instance']
+    relevant = test_set['relevant']
+    irrelevant = test_set['irrelevant']
 
     percentages = util.step_range(.1,.4,.1)
     results = dict()
@@ -285,7 +243,7 @@ def test_rocchio(testset=ts.TEST_2):
             for beta in betas:
                 print("Percentage: {} Alpha: {} Beta: {}".format(percent, alpha, beta))
                 results[percent][alpha][beta] = {'recalls': []}
-                for sample_num in range(SAMPLES):
+                for sample_num in range(samples):
                     relevant_sample = util.percent_sample(relevant, percent)
                     irrelevant_sample = irrelevant
 
@@ -352,5 +310,5 @@ if __name__ == "__main__":
     #print(sendQuery(vector_query='true', instance='shakespeare', relevant=[19498]))
     #graph_rocchio(test_rocchio())
     #test()
-    test_pseudo()
+    test(test_fns=VEC_ADJ_FNS_PSEUDO)
     #graph('results_20131209011200')
