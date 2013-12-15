@@ -296,6 +296,6 @@ def graph_rocchio(fname):
 if __name__ == "__main__":
     #sendStringQuery("test")
     #print(sendQuery(vector_query='true', instance='shakespeare', relevant=[19498]))
-    graph_rocchio(test_rocchio())
-    #test()
+    #graph_rocchio(test_rocchio())
+    test()
     #graph('results_20131209011200')
