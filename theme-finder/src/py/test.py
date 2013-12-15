@@ -219,6 +219,8 @@ def graph(fname, analysis_fns = FN_TUPLES):
 
             ax.set_xlabel('Starting (%)')
             ax.set_ylabel('Recall (%)')
+            if fn_name == 'std':
+                ax.set_ylabel('Std')
 
             # shink current axis's height by 10% on the bottom for legend
             box = ax.get_position()
