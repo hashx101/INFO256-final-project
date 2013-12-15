@@ -30,7 +30,7 @@ from matplotlib import cm
 from matplotlib.mlab import griddata
 
 
-SAMPLES = 15
+SAMPLES = 2
 HEADERS = {'User-Agent': ['Twisted Web Client'],
                  'Origin': ['http://localhost'],
                  'Accept-Language': ['en-US','en'],

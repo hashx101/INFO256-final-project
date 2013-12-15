@@ -28,7 +28,7 @@ $database = connect($instance);
 
 /** Algorithm parameters **/
 // weight with which query should be adjusted towards relevant sentences
-$ALPHA = 0;
+$ALPHA = 1;
 
 $ALPHA_plus = 0.75;
 $BETA = $ALPHA_plus;
@@ -298,7 +298,7 @@ function process_relevance_feedback($query, $relevant, $irrelevant,
 
 function calculate_new_vector_query($query, $relevant, $irrelevant,
 									$vec_func='rocchio',
-									$alpha=0,
+									$alpha=1,
 									$beta=.75){
 	$already_relevant = array_key_exists('relevant', $query) ? 
 										(array) $query['relevant'] :
@@ -323,6 +323,7 @@ function calculate_new_vector_query($query, $relevant, $irrelevant,
 	
 	//$sentence_adjustment = calculate_sentence_adjustment($query, $vector_query, 
 	//	$relevant, $irrelevant);
+	$vector_query = $vector_query->scalarMultiply($alpha);
 	$new_query = $vector_query->vectorAdd($sentence_adjustment);
 	$new_query->normalize();
 	$new_features = $new_query->features;
@@ -418,9 +419,6 @@ function calculate_sentence_adjustment_ide_regular($query, $vector_query, $relev
 //vector adjustment: Rocchio
 function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrelevant,
 									   $alpha=0, $beta=.75){
-	error_log($alpha);
-	error_log($beta);
-
 	$already_relevant = array_key_exists('relevant', $query) ? 
 										(array) $query['relevant'] :
 										array();
@@ -453,13 +451,11 @@ function calculate_sentence_adjustment($query, $vector_query, $relevant, $irrele
 	$negative_adjustment = $irrelevant_vect->scalarMultiply(-1*(1 - $beta));
 	
 	$no_longer_negative_adjustment = $no_longer_irrelevant_vect->scalarMultiply(1-$beta);
-	
-	$weighted_original_vector = $vector_query->scalarMultiply($alpha);
 
-	$adjustment = $positive_adjustment->vectorAdd($weighted_original_vector);
-	$adjustment = $adjustment->vectorAdd($negative_adjustment);
+	$adjustment = $positive_adjustment->vectorAdd($negative_adjustment);
 	$adjustment = $adjustment->vectorAdd($no_longer_positive_adjustment);
 	$adjustment = $adjustment->vectorAdd($no_longer_negative_adjustment);
+
 	return $adjustment;
 }
 
