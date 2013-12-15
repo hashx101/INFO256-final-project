@@ -1,44 +1,38 @@
 from __future__ import print_function
 from __future__ import division
 
-
-from pprint import pprint
 from json import loads
 import urllib2
 import urllib
 import util
 import random
-import math
 import copy
-from collections import defaultdict
 import prettyplotlib as ppl
 import testsets as ts
 import numpy as np
 import datetime
+import pickle
 
 # prettyplotlib imports 
 from prettyplotlib import plt
 from prettyplotlib import mpl
 from prettyplotlib import brewer2mpl
 from matplotlib.font_manager import FontProperties
-import random
-import pickle
 
 # for 3d graph
-from mpl_toolkits.mplot3d import Axes3D
 from matplotlib import cm
 from matplotlib.mlab import griddata
 
 
-SAMPLES = 2
+SAMPLES = 10
 HEADERS = {'User-Agent': ['Twisted Web Client'],
-                 'Origin': ['http://localhost'],
-                 'Accept-Language': ['en-US','en'],
-                 'Content-Type': ['application/x-www-form-urlencoded'],
-                 'Accept': ['*/*'],
-                 'Referer': ['http://localhost/theme-finder/'],
-                 'X-Requested-With': ['XMLHttpRequest'],
-                 'Connection': ['keep-alive']}
+           'Origin': ['http://localhost'],
+           'Accept-Language': ['en-US','en'],
+           'Content-Type': ['application/x-www-form-urlencoded'],
+           'Accept': ['*/*'],
+           'Referer': ['http://localhost/theme-finder/'],
+           'X-Requested-With': ['XMLHttpRequest'],
+           'Connection': ['keep-alive']}
 
 def sendQuery(**kwargs):
     data = urllib.urlencode(kwargs)
@@ -67,7 +61,7 @@ def sendVectorQuery(query={'relevant': [],
                     instance="shakespeare",
                     relevant=[],
                     irrelevant=[],
-                    alpha=0,
+                    alpha=1,
                     beta=.75):
 
     return sendQuery(query=query,
@@ -223,8 +217,8 @@ def test_rocchio(testset=ts.TEST_2):
     for percent in percentages:
         results[percent] = {}
         
-        alphas = util.step_range(0, 1, .25)
-        betas = util.step_range(0, 1, .25)
+        alphas = util.step_range(0, 1, .1)
+        betas = util.step_range(0, 1, .1)
         for alpha in alphas:
             results[percent][alpha] = {}
 
