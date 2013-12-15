@@ -23,7 +23,7 @@ from matplotlib import cm
 from matplotlib.mlab import griddata
 
 
-DEF_SAMPLES = 25
+DEF_SAMPLES = 10
 DEF_START = .05
 DEF_END = .7
 DEF_STEP = .05
@@ -36,7 +36,7 @@ VEC_ADJ_FNS_PSEUDO = ['rocchio', 'ide_dec', 'ide_regular', 'pseudo']
 COLORS = {'rocchio': 'red',
           'ide_dec': 'blue',
           'ide_regular': 'green',
-          'pseudo': 'purple'}
+          'pseudo': 'magenta'}
 
 
 def sendQuery(**kwargs):
@@ -169,10 +169,6 @@ def test(test_set=ts.TEST_2, test_fns=VEC_ADJ_FNS, samples=DEF_SAMPLES,
 
                 # kludgy fix for when user gives percentage range to 100
                 results[percent][fn]['recalls'].append(len(found) / max(.0000001, len(to_find)))
-            
-        for fn in test_fns:
-            recalls = results[percent][fn]['recalls']
-            results[percent][fn]['recall'] = sum(recalls) / len(recalls)
 
     results = {'results': results,
                'test_set': test_set_name,
@@ -189,52 +185,68 @@ def test(test_set=ts.TEST_2, test_fns=VEC_ADJ_FNS, samples=DEF_SAMPLES,
     graph(fname)
 
 
-def graph(fname):   
+FN_TUPLES = zip(['mean', 'median', 'std'], [np.mean, np.median, np.std])
+
+def graph(fname, analysis_fns = FN_TUPLES):   
     """
     Graphs mean and median of vector functions over a given starting
     percentage of relevant sentence ids.
 
     Arguments:
     fname -- the filename of the pickled output
+    analysis_fns -- a list of (fn_name, fn) to run over the data
     """
     with open(fname) as f:
         results = pickle.load(f)
         test_set = results['test_set']
+        vector_functions = results['vector_functions']
+        step_percentage = results['step_percentage']
         results = results['results']  
-        fns = results['vector_functions']
+        percents = sorted(results.keys())
 
-        mean = lambda vals: sum(vals) / len(vals)
-        median = np.median              
         
-        for fn in ['mean', 'median']:
+        for fn_name, fn in analysis_fns:
             fig, ax = plt.subplots(1)
-            ax.set_title(fn.capitalize())
-            for vec_fn in fns:
-                x_axis = sorted(results.keys())
-                y_axis = [eval(fn)(results[percent][vec_fn]['recalls']) for percent in x_axis]
-                ppl.plot(ax, x_axis, y_axis, label=vec_fn, linewidth=2)
+            ax.set_title(fn_name.capitalize())
+            for vec_fn in vector_functions:
+                xs = sorted(results.keys())
+                x_axis = [x * 100 for x in xs]
+                y_axis = [fn(results[percent][vec_fn]['recalls']) * 100 for percent in xs]
+                ppl.plot(ax, x_axis, y_axis, label=vec_fn, linewidth=2, color=COLORS[vec_fn])
+
+            ax.set_xticks([i * 100 for i in percents])
+            ax.set_xlim([percents[0]*100, percents[-1]*100])
 
             ax.set_xlabel('Starting (%)')
             ax.set_ylabel('Recall (%)')
 
-            # Shink current axis's height by 10% on the bottom
+            # shink current axis's height by 10% on the bottom for legend
             box = ax.get_position()
             ax.set_position([box.x0, box.y0 + box.height * 0.1,
                              box.width, box.height * 0.9])
 
-            # Put a legend below current axis
+            # put a legend below current axis
             ax.legend(loc='upper center', bbox_to_anchor=(0.5, -0.1),
                       fancybox=True, shadow=True, ncol=5)
 
-            fig.savefig('line_plot_{}_{}.png'.format(fn, test_set))
+            fig.savefig('line_plot_{}_{}.png'.format(fn_name, test_set))
 
         fig, ax = plt.subplots(1)
         ax.set_title('Recalls')
-        percents = sorted(results.keys())
-        for vec_fn in fns:
+
+        # jitter to see all series
+        current = -(len(vector_functions) / 2)
+        step = 1
+        for vec_fn in vector_functions:
                 # intermediate variables are for plebs
-                x, y = zip(*[item for sublist in [[(percent, val) for val in results[percent][vec_fn]['recalls']] for percent in percents] for item in sublist])
-                ppl.scatter(ax, x, y, label=vec_fn, facecolor=COLORS[vec_fn], alpha=0.5)
+                x, y = zip(*[item for sublist in [[((percent*100)+current, val*100) for val in results[percent][vec_fn]['recalls']] for percent in percents] for item in sublist])
+                current += step
+                ppl.scatter(ax, x, y, label=vec_fn, facecolor=COLORS[vec_fn], alpha=0.3)
+
+        # set x ticks and limit ranges
+        ax.set_xticks([i * 100 for i in percents])
+        ax.set_xlim([(percents[0] - step_percentage) * 100, (percents[-1] + step_percentage) * 100])
+        ax.set_ylim([-5,100])
 
         ax.set_xlabel('Starting (%)')
         ax.set_ylabel('Recall (%)')
@@ -292,7 +304,7 @@ def test_rocchio(test_set=ts.TEST_2, samples=DEF_SAMPLES):
                     found = set(relevant_returned).difference(relevant_sample_set)
 
                     results[percent][alpha][beta]['recalls'].append(len(found) / max(.0000001, len(to_find)))
-    fname = 'results_rocchio_{}'.format(datetime.datetime.now().strftime("%Y%m%d%H%m%S"))
+    fname = 'results_rocchio_{}'.format(datetime.datetime.now().strftime("%Y%m%d_%H%m%S"))
     with open(fname, 'w') as f:
         pickle.dump(results, f)
     return fname
@@ -332,9 +344,4 @@ def graph_rocchio(fname):
 
 
 if __name__ == "__main__":
-    #sendStringQuery("test")
-    #print(sendQuery(vector_query='true', instance='shakespeare', relevant=[19498]))
-    #graph_rocchio(test_rocchio())
-    #test()
-    test(test_fns=VEC_ADJ_FNS_PSEUDO)
-    #graph('results_20131209011200')
+    pass
