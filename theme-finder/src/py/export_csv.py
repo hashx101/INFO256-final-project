@@ -1,3 +1,4 @@
+# This file is to generate a table from the results
 import test
 import pickle
 import csv
@@ -34,18 +35,6 @@ def getCols(results, roch_type):
         roc += [roc_rate]
     return {'ide_dec':dec, 'ide_reg':reg, 'rocchio':roc, 'pseudo':pseu}
 
-#dict_rocchio = getCols(results, 'rocchio')
-#ide_dec = dict_rocchio['ide_dec']
-#ide_regular = dict_rocchio['ide_reg']
-#rocchio = dict_rocchio['rocchio']
-#percentage = results.keys()
-#percentage.sort()
-#rows = zip(percentage, ide_dec, ide_regular, rocchio)
-
-#with open('result_table.csv', "wb") as f:
-#    writer = csv.writer(f)
-#    for row in rows:
-#        writer.writerow(row)
 
 #0.75
 # results_20131215_141256
