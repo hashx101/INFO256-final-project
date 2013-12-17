@@ -22,7 +22,7 @@ from prettyplotlib import brewer2mpl
 from matplotlib import cm
 from matplotlib.mlab import griddata
 
-
+# Constants
 DEF_SAMPLES = 10
 DEF_START = .05
 DEF_END = .7
